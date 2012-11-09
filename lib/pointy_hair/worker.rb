@@ -21,15 +21,17 @@ module PointyHair
       @exit_code = nil
     end
 
+    def pid= x
+      @dir = nil unless x.nil?
+      @pid = x
+    end
+
     def clear_status!
       @status = { }
       set_status! :created
     end
 
-    def dir; "#{@base_dir}/#{@kind}/#{@instance}/#{@pid}"; end
-    def status_file;    "#{dir}/status"; end
-    def work_file;      "#{dir}/work"; end
-    def last_work_file; "#{dir}/last_work"; end
+    def dir; @dir ||= "#{@base_dir}/#{@kind}/#{@instance}/#{@pid}"; end
 
     def start_process!
       @process_count += 1
@@ -264,9 +266,13 @@ module PointyHair
       end
     end
 
+    def expand_file file
+      File.expand_path(file.to_s, dir)
+    end
+
     def write_file! file, thing = nil, &blk
       # log { "write_file! #{file}" }
-      file = "#{dir}/#{file}"
+      file = expand_file(file)
       FileUtils.mkdir_p(File.dirname(file))
       case thing
       when Time
@@ -285,7 +291,7 @@ module PointyHair
     end
 
     def read_file! file, &blk
-      file = "#{dir}/#{file}"
+      file = expand_file(file)
       blk ||= lambda { | fh | fh.read }
       result = File.open(file, "r", &blk)
     rescue Errno::ENOENT
@@ -293,18 +299,18 @@ module PointyHair
     end
 
     def remove_file! file
-      file = "#{dir}/#{file}"
+      file = expand_file(file)
       File.unlink(file)
     rescue Errno::ENOENT
     end
 
     def file_exists? file
-      file = "#{dir}/#{file}"
+      file = expand_file(file)
       File.exist?(file)
     end
 
     def remove_files!
-      FileUtils.rm_rf("#{dir}")
+      FileUtils.rm_rf(dir)
       unless File.exist?(file = current_symlink)
         File.unlink(file)
       end
