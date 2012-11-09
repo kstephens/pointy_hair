@@ -159,33 +159,32 @@ module PointyHair
         # log { "checking worker #{worker}" }
         worker.get_status!
         now = Time.now.gmtime
-        worker.status[:checked_at] = now
         case
         when worker_exited?(worker)
-          log { "worker exited #{worker.pid}" }
           worker_exited! worker
         when ! process_exists?(worker.pid)
-          log { "worker died #{worker.pid}" }
-          worker.write_file! :died, now
-          worker.get_status!
-          worker.set_status! :died, :gone_at => now
+          worker_set_status! worker, :died, now
           worker_exited! worker
         when worker_stuck?(worker)
-          log { "worker stuck #{worker.pid}" }
-          worker.write_file! :stuck, now
-          worker.get_status!
-          worker.set_status! :stuck, :stuck_at => now
+          worker_set_status! worker, :stuck, now
           # TODO: put work back in!
           worker_exited! worker
-        else
-          worker.write_file! :checked, now
         end
+        worker.status[:checked_at] = now
+        worker.write_file! :checked, now
         # pp worker
       end
     end
 
+    def worker_set_status! worker, state, now, data = nil
+      log { "worker #{state} #{worker.pid}" }
+      worker.write_file! state, now
+      worker.get_status!
+      worker.set_status! state
+    end
+
     def worker_exited! worker
-      log { "queue reap pid #{worker.pid}" }
+      # log { "queue reap pid #{worker.pid}" }
       @reap_pids.enq(worker.pid)
       worker.exited!
       worker.pid = nil
