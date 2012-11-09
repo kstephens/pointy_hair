@@ -4,6 +4,11 @@ module PointyHair
       File.expand_path(file.to_s, dir)
     end
 
+    def write_yaml fh, data
+      fh.set_encoding("UTF-8")
+      fh.write YAML.dump(data)
+    end
+
     def write_file! file, thing = nil, &blk
       # log { "write_file! #{file}" }
       file = expand_file(file)
