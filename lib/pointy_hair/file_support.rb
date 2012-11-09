@@ -9,7 +9,7 @@ module PointyHair
       file = expand_file(file)
       FileUtils.mkdir_p(File.dirname(file))
       if blk.nil? and thing.nil?
-        thing = Time.now.gmtime
+        thing = Time.now
       end
       case thing
       when Time

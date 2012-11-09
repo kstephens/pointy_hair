@@ -159,7 +159,7 @@ module PointyHair
       workers.each do | worker |
         # log { "checking worker #{worker}" }
         worker.get_status!
-        now = Time.now.gmtime
+        now = Time.now
         case
         when worker_exited?(worker)
           worker_exited! worker

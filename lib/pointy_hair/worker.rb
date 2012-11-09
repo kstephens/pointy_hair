@@ -200,13 +200,13 @@ module PointyHair
         raise Error::Stop
       end
       unless file_exists? :stop
-        write_file! :stop, Time.now.gmtime
+        write_file! :stop, Time.now
       end
     end
 
     def pause!
       @paused = true
-      write_file! :paused, Time.now.gmtime
+      write_file! :paused, Time.now
     end
 
     def resume!
@@ -310,7 +310,7 @@ module PointyHair
     def set_status! state = nil, data = nil
       status.update(data) if data
       if state
-        now = Time.now.gmtime
+        now = Time.now
         status[:status] = state
         status[:status_time] = status[:"#{state}_at"] = now
         write_file! :status, status[:status].to_s
