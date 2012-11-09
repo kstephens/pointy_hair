@@ -96,6 +96,10 @@ module PointyHair
     end
 
     def setup_signal_handlers!
+      Signal.trap('INT') do
+        log { "SIGINT" }
+        stop!
+      end
       Signal.trap('TERM') do
         stop!
       end
