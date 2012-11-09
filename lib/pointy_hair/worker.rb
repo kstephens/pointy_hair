@@ -1,12 +1,17 @@
 # -- encoding : utf-8 --
 require 'fileutils'
 require 'yaml'
+require 'socket' # gethostname
+
+require 'pointy_hair/file_support'
 
 module PointyHair
   class Worker
+    include FileSupport
     attr_accessor :kind, :options, :instance, :status, :base_dir
     attr_accessor :paused, :exit_code, :work_id, :max_work_id
     attr_accessor :pid, :process_count, :keep_files
+    attr_accessor :work, :work_error
 
     def to_s
       "\#<#{self.class} #{kind} #{instance} #{pid} #{status[:status]} #{work_id} >"
@@ -20,6 +25,7 @@ module PointyHair
       @status = { }
       @work_id = 0
       @exit_code = nil
+      @pause_interval = 5
     end
 
     def pid= x
@@ -28,11 +34,13 @@ module PointyHair
     end
 
     def clear_status!
-      @status = { }
+      @status = { :hostname => Socket.gethostname.force_encoding("UTF-8") }
       set_status! :created
     end
 
-    def dir; @dir ||= "#{@base_dir}/#{@kind}/#{@instance}/#{@pid}"; end
+    def dir
+      @dir ||= "#{@base_dir}/#{@kind}/#{@instance}/#{@pid}".freeze
+    end
 
     def start_process!
       @process_count += 1
@@ -45,11 +53,20 @@ module PointyHair
         run!
       rescue ::Exception => exc
         self.exit_code ||= 1
+        e = make_error_hash(exc)
+        set_status! :exit_error, :error => e
+        write_file! :exit_error do | fh |
+          fh.set_encoding("UTF-8")
+          e[:work_id] = @work_id
+          e[:time] = status[:status_time]
+          fh.write YAML.dump(e)
+        end
         raise exc
       ensure
         self.exit_code ||= 0
         set_status! :exited
         write_file! :exited do | fh |
+          fh.set_encoding("UTF-8")
           fh.puts exit_code
         end
         Process.exit! exit_code
@@ -72,9 +89,11 @@ module PointyHair
       set_status! :exiting
     end
 
+    # callback
     def before_run!
     end
 
+    # callback
     def after_run!
     end
 
@@ -85,11 +104,11 @@ module PointyHair
     end
 
     def redirect_stdio!
-      $_stdin ||= $stdin
+      $_stdin  ||= $stdin
       $_stdout ||= $stdout
       $_stderr ||= $stderr
       STDIN.close
-      $stdin = STDIN
+      $stdin  = STDIN
       $stdout = STDOUT
       $stderr = STDERR
       STDOUT.reopen(File.open("#{dir}/stdout", "a+"))
@@ -120,7 +139,7 @@ module PointyHair
         check_paused!
         unless handle_paused
           set_status! :run_loop
-          do_work!
+          get_and_do_work!
         end
         check_max_work_id!
       end
@@ -138,7 +157,7 @@ module PointyHair
         set_status! :paused
         paused!
         loop do
-          sleep(5 + rand)
+          sleep(@pause_interval + rand)
           check_paused!
           check_stop!
           break unless @paused || @stop
@@ -157,12 +176,15 @@ module PointyHair
       end
     end
 
+    # callback
     def paused!
     end
 
+    # callback
     def resumed!
     end
 
+    # callback
     def stopped!
     end
 
@@ -192,44 +214,85 @@ module PointyHair
       remove_file! :paused
     end
 
-    def do_work!
+    def get_and_do_work!
+      @work_error = nil
       set_status! :waiting
-      if work = get_work!
+      @wait_t0 = Time.now
+      if @work = get_work!
+        @wait_t1 = Time.now
         status[:work_id] = @work_id += 1
         set_status! :working
-        set_work! work
-        set_last_work! work
-        t0 = Time.now
+        save_work! work
+        rename_file! :work_error, :last_work_error
+        @work_t0 = Time.now
         begin
-          err = nil
           work! work
+          @work_t1 = Time.now
+          save_last_work!
+          finished_work!
         rescue ::Exception => exc
-          err = exc
-          e = {
-            :class_name => err.class.name,
-            :message => err.message,
-            :backtrace => err.backtrace,
-          }
-          set_status! :error, :error => e
-          write_file! :error do | fh |
-            e[:work_id] = @work_id
-            e[:time] = status[:status_time]
-            fh.write YAML.dump(e)
-          end
+          @work_error = exc
+          work_error! exc
           raise err
         ensure
-          unless err
-            t1 = Time.now
-            dt = t1 - t0
-            status[:work_dt] = dt
-            h = status[:work_history] ||= [ ]
-            h << { :work_id => @work_id, :time => t1, :dt => dt }
-            h.shift while h.size > 10
-            set_status!
-          end
-          set_status! :worked
+          update_work_status!
         end
       end
+    end
+
+    # callback
+    def finished_work!
+    end
+
+    # callback
+    def work_error! err
+    end
+
+    def update_work_status!
+      save_work_error!
+      save_work_history!
+    end
+
+    def save_work_error!
+      if err = @work_error
+        e = make_error_hash(err)
+        set_status! :error, :error => e
+        write_file! :work_error do | fh |
+          fh.set_encoding("UTF-8")
+          e[:work_id] = @work_id
+          e[:time] = status[:status_time]
+          fh.write YAML.dump(e)
+        end
+      end
+      err
+    end
+
+    def save_work_history!
+      err = @work_error
+      wh = status[:work_history] ||= [ ]
+      wh << {
+        :work_id   => @work_id,
+        :wait_time => @wait_t0,
+        :work_time => @work_t0,
+        :work_dt   => status[:work_dt] = dt(@work_t0, @work_t1),
+        :wait_dt   => status[:wait_dt] = dt(@wait_t0, @work_t1),
+        :error     => err && err.inspect,
+      }
+      wh.shift while wh.size > 10
+      set_status!(err ? :error : :worked)
+    end
+
+    def make_error_hash err
+      e = {
+        :class_name => err.class.name.force_encoding('UTF-8'),
+        :message    => err.message.force_encoding('UTF-8'),
+        :backtrace  => err.backtrace.map{|x| x.force_encoding('UTF-8') },
+      }
+      e
+    end
+
+    def dt t0, t1
+      t1 && t0 && t1 - t0
     end
 
     def get_work!
@@ -254,78 +317,27 @@ module PointyHair
         procline!
       end
       write_file! :state do | fh |
+        fh.set_encoding("UTF-8")
         fh.write YAML.dump(status)
       end
     end
 
     def get_status!
       read_file! :state do | fh |
+        fh.set_encoding("UTF-8")
         @status = YAML.load(fh.read) || { }
       end
     end
 
-    def set_work! work
+    def save_work! work
       write_file! :work do | fh |
+        fh.set_encoding("UTF-8")
         fh.write YAML.dump(work)
       end
     end
 
-    def set_last_work! work
-      write_file! :last_work do | fh |
-        work = { :work => work }
-        work[:time] = Time.now.gmtime
-        fh.write YAML.dump(work)
-      end
-    end
-
-    def expand_file file
-      File.expand_path(file.to_s, dir)
-    end
-
-    def write_file! file, thing = nil, &blk
-      # log { "write_file! #{file}" }
-      file = expand_file(file)
-      FileUtils.mkdir_p(File.dirname(file))
-      case thing
-      when Time
-        thing = thing.iso8601(4)
-      end
-      blk ||= lambda { | fh | fh.puts thing }
-      result = File.open(tmp = "#{file}.tmp", "w+", &blk)
-      File.chmod(0644, tmp)
-      File.rename(tmp, file)
-      tmp = nil
-      result
-    ensure
-      if tmp
-        File.unlink(tmp) rescue nil
-      end
-    end
-
-    def read_file! file, &blk
-      file = expand_file(file)
-      blk ||= lambda { | fh | fh.read }
-      result = File.open(file, "r", &blk)
-    rescue Errno::ENOENT
-      nil
-    end
-
-    def remove_file! file
-      file = expand_file(file)
-      File.unlink(file)
-    rescue Errno::ENOENT
-    end
-
-    def file_exists? file
-      file = expand_file(file)
-      File.exist?(file)
-    end
-
-    def remove_files!
-      FileUtils.rm_rf(dir)
-      unless File.exist?(file = current_symlink)
-        File.unlink(file)
-      end
+    def save_last_work!
+      rename_file! :work, :completed_work
     end
 
     def check_paused!
@@ -336,17 +348,6 @@ module PointyHair
       if file_exists?(:stop)
         stop!
       end
-    end
-
-    def current_symlink
-      File.expand_path("../current", dir)
-    end
-
-    def current_symlink!
-      file = current_symlink
-      FileUtils.mkdir_p(File.dirname(file))
-      File.unlink(file) rescue nil
-      File.symlink(File.basename(dir), file)
     end
 
     def log msg = nil
