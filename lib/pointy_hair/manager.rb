@@ -184,9 +184,7 @@ module PointyHair
     def worker_exited! worker
       log { "queue reap pid #{worker.pid}" }
       @reap_pids.enq(worker.pid)
-      unless worker.file_exists? :keep
-        worker.remove_files!
-      end
+      worker.exited!
       worker.pid = nil
     end
 

@@ -55,6 +55,12 @@ module PointyHair
       end
     end
 
+    def exited!
+      unless file_exists? :keep
+        remove_files!
+      end
+    end
+
     def run!
       set_status! :before_run
       before_run!
