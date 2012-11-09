@@ -4,7 +4,7 @@ require 'thread'
 
 module PointyHair
   class Manager < Worker
-    attr_accessor :worker_config, :poll_interval
+    attr_accessor :worker_config, :poll_interval, :keep_files, :verbose
 
     def initialize
       super
@@ -13,6 +13,7 @@ module PointyHair
       @kind = "manager"
       @instance = 0
       @poll_interval = 5
+      @keep_files = (ENV['POINTY_HAIR_KEEP_FILES'] || '0').to_i > 0
     end
 
     def reload_config!
@@ -40,14 +41,15 @@ module PointyHair
       spawn_workers!
       check_workers!
       sleep poll_interval
-      show_workers!
+      show_workers! if @verbose
     end
 
     def after_run!
       stop_workers!
       stop_reaper!
       check_workers!
-      show_workers!
+      show_workers! if @verbose
+      exited!
     end
 
     def paused!
@@ -105,11 +107,12 @@ module PointyHair
             worker.pid = nil
             worker.base_dir = "#{dir}/worker"
             worker.kind = kind
-            worker.options = cfg[:options]
             worker.instance = i
             new_workers << worker
             log { "created worker #{worker}" }
           end
+          worker.options = cfg[:options]
+          worker.keep_files = keep_files
         end
       end
       workers.concat(new_workers)

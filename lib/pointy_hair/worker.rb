@@ -5,7 +5,7 @@ module PointyHair
   class Worker
     attr_accessor :kind, :options, :instance, :status, :base_dir
     attr_accessor :paused, :exit_code, :work_id, :max_work_id
-    attr_accessor :pid, :process_count
+    attr_accessor :pid, :process_count, :keep_files
 
     def to_s
       "\#<#{self.class} #{kind} #{instance} #{pid} #{status[:status]} #{work_id} >"
@@ -56,7 +56,7 @@ module PointyHair
     end
 
     def exited!
-      unless file_exists? :keep
+      unless @keep_files || file_exists?(:keep)
         remove_files!
       end
     end
