@@ -1,3 +1,4 @@
+# -- encoding : utf-8 --
 require "pointy_hair/version"
 
 module PointyHair

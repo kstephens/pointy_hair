@@ -1,3 +1,4 @@
+# -- encoding : utf-8 --
 module PointyHair
   class Worker
     class Test < self
