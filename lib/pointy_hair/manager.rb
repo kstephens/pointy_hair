@@ -41,14 +41,17 @@ module PointyHair
       prune_workers!
       spawn_workers!
       check_workers!
-      sleep poll_interval
+      write_workers_status!
       show_workers! if @verbose
+      sleep poll_interval
     end
 
     def after_run!
       stop_workers!
       stop_reaper!
       check_workers!
+      get_workers_status!
+      write_workers_status!
       show_workers! if @verbose
       exited!
     end
@@ -227,13 +230,48 @@ module PointyHair
       false
     end
 
+    def get_workers_status!
+      workers.each do | worker |
+        get_worker_status! worker
+      end
+    end
+
+    def get_worker_status! worker
+      save = worker.status[:checked_at]
+      worker.get_status!
+      worker.status[:checked_at] = save
+    end
+
+    def write_workers_status!
+      data = { :time => Time.now }
+      ws = data[:workers] ||= [ ]
+      workers_sorted.each do | worker |
+        w = {
+          :kind       => worker.kind,
+          :instance   => worker.instance,
+          :pid        => worker.pid,
+          :checked_at => worker.status[:checked_at],
+          :status     => worker.status[:status],
+        }
+        ws << w
+      end
+      write_file! :workers_status do | fh |
+        write_yaml fh, data
+      end
+    end
+
     def show_workers!
       $stderr.puts "workers::\n"
-      ws = workers.sort { | a, b | a.kind.to_s <=> b.kind.to_s }.sort_by(&:instance)
-      ws.each do | w |
+      workers_sorted.each do | w |
         $stderr.puts "  #{w}"
       end
       $stderr.puts "----\n\n"
+    end
+
+    def workers_sorted
+      ws = workers.sort { | a, b | a.kind.to_s <=> b.kind.to_s }
+      ws.sort! { | a, b | a.instance <=> b.instance }
+      ws
     end
 
     def get_class name
