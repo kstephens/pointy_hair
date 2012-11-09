@@ -50,7 +50,7 @@ module PointyHair
       stop_workers!
       stop_reaper!
       check_workers!
-      get_workers_status!
+      get_workers_state!
       write_workers_status!
       show_workers! if @verbose
       exited!
@@ -161,7 +161,7 @@ module PointyHair
     def check_workers!
       workers.each do | worker |
         # log { "checking worker #{worker}" }
-        worker.get_status!
+        worker.get_state!
         now = Time.now
         case
         when worker_exited?(worker)
@@ -174,7 +174,7 @@ module PointyHair
           # TODO: put work back in!
           worker_exited! worker
         end
-        worker.status[:checked_at] = now
+        worker.checked_at = now
         worker.write_file! :checked, now
         # pp worker
       end
@@ -183,7 +183,7 @@ module PointyHair
     def worker_set_status! worker, state, now, data = nil
       log { "worker #{state} #{worker.pid}" }
       worker.write_file! state, now
-      worker.get_status!
+      worker.get_state!
       worker.set_status! state
     end
 
@@ -230,16 +230,14 @@ module PointyHair
       false
     end
 
-    def get_workers_status!
+    def get_workers_state!
       workers.each do | worker |
-        get_worker_status! worker
+        get_worker_state! worker
       end
     end
 
-    def get_worker_status! worker
-      save = worker.status[:checked_at]
-      worker.get_status!
-      worker.status[:checked_at] = save
+    def get_worker_state! worker
+      worker.get_state!
     end
 
     def write_workers_status!
@@ -249,10 +247,15 @@ module PointyHair
         w = {
           :kind       => worker.kind,
           :instance   => worker.instance,
-          :pid        => worker.pid,
-          :checked_at => worker.status[:checked_at],
-          :status     => worker.status[:status],
+          :pid        => worker.state[:pid],
+          :started_at => worker.state[:started_at],
+          :checked_at => worker.checked_at,
+          :status     => worker.status,
         }
+        if x = worker.exit_code
+          w[:exited_at] = worker.state[:exited_at]
+          w[:exit_code] = x
+        end
         ws << w
       end
       write_file! :workers_status do | fh |

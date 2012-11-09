@@ -8,13 +8,20 @@ require 'pointy_hair/file_support'
 module PointyHair
   class Worker
     include FileSupport
-    attr_accessor :kind, :options, :instance, :status, :base_dir
-    attr_accessor :paused, :exit_code, :work_id, :max_work_id
+    attr_accessor :kind, :options, :instance, :state, :base_dir
+    attr_accessor :paused, :work_id, :max_work_id
     attr_accessor :pid, :process_count, :keep_files
     attr_accessor :work, :work_error
 
+    def status    ; state[:status]     ; end
+    def status= x ; state[:status] = x ; end
+    def checked_at   ; @checked_at ; end
+    def checked_at= x; state[:checked_at] = @checked_at = x ; end
+    def exit_code    ; state[:exit_code]     ; end
+    def exit_code= x ; state[:exit_code] = x ; end
+
     def to_s
-      "\#<#{self.class} #{kind} #{instance} #{pid} #{status[:status]} #{work_id} >"
+      "\#<#{self.class} #{kind} #{instance} #{pid} #{status} #{work_id} >"
     end
 
     def initialize
@@ -22,7 +29,7 @@ module PointyHair
       @running = false
       @pid = $$
       @process_count = 0
-      @status = { }
+      @state = { }
       @work_history = [ ]
       @work_id = 0
       @exit_code = nil
@@ -34,8 +41,8 @@ module PointyHair
       @pid = x
     end
 
-    def clear_status!
-      @status = { :hostname => Socket.gethostname.force_encoding("UTF-8") }
+    def clear_state!
+      @state = { :hostname => Socket.gethostname.force_encoding("UTF-8") }
       set_status! :created
     end
 
@@ -48,8 +55,8 @@ module PointyHair
       self.exit_code = nil
       begin
         self.pid = $$
-        clear_status!
-        set_status! :start
+        clear_state!
+        set_status! :started
         setup_process!
         run!
       rescue ::Exception => exc
@@ -59,7 +66,7 @@ module PointyHair
         write_file! :exit_error do | fh |
           fh.set_encoding("UTF-8")
           e[:work_id] = @work_id
-          e[:time] = status[:status_time]
+          e[:time] = state[:status_time]
           write_yaml(fh, e)
         end
         raise exc
@@ -145,10 +152,10 @@ module PointyHair
         check_max_work_id!
       end
       if @stopped
+        write_status_file! :stopped
         stopped!
       end
-      set_status! :finished
-      write_file! :finished
+      write_status_file! :finished
     ensure
       set_status! :run_loop_end
     end
@@ -200,9 +207,14 @@ module PointyHair
       if opts[:force]
         raise Error::Stop
       end
+      now = Time.now
       unless file_exists? :stop
-        write_file! :stop, Time.now
+        write_file! :stop, now
       end
+      unless file_exists? :stopping
+        write_file! :stopping, now
+      end
+      state[:stopping_at] ||= now
     end
 
     def pause!
@@ -221,7 +233,7 @@ module PointyHair
       @wait_t0 = @wait_t1 = Time.now
       if @work = get_work!
         @wait_t1 = Time.now
-        status[:work_id] = @work_id += 1
+        state[:work_id] = @work_id += 1
         set_status! :working
         save_work! work
         rename_file! :work_error, :last_work_error
@@ -258,10 +270,10 @@ module PointyHair
     def save_work_error!
       if err = @work_error
         e = make_error_hash(err)
-        set_status! :error, :error => e
+        set_status! :work_error, :error => e
         write_file! :work_error do | fh |
           e[:work_id] = @work_id
-          e[:time] = status[:status_time]
+          e[:time] = state[:status_time]
           write_yaml(fh, e)
         end
       end
@@ -275,9 +287,9 @@ module PointyHair
         :work_id   => @work_id,
         :wait_time => @wait_t0,
         :work_time => @work_t0,
-        :work_dt   => status[:work_dt] = @work_dt = dt(@work_t0, @work_t1),
-        :wait_dt   => status[:wait_dt] = @wait_dt = dt(@wait_t0, @work_t1),
-        :error     => err && err.inspect,
+        :work_dt   => state[:work_dt] = @work_dt = dt(@work_t0, @work_t1),
+        :wait_dt   => state[:wait_dt] = @wait_dt = dt(@wait_t0, @work_t1),
+        :work_error => err && err.inspect,
       }
       wh = @work_history
       wh.unshift h
@@ -286,13 +298,12 @@ module PointyHair
       t0 = wh[-1][:work_time]
       t1 = h[:work_time]
       dt = dt(t0, t1)
-      if @work_per_sec = (dt && (wh.size / dt)) || nil
-        write_file! :work_rate, '%10g work/min' % (@work_per_sec * 60)
-      end
-      @work_per_min = @work_per_sec && @work_per_sec * 60
+      state[:work_per_sec] = @work_per_sec = (dt && (wh.size / dt)) || nil
+      state[:work_per_min] = @work_per_min = @work_per_sec && @work_per_sec * 60
 
-      status[:work_per_sec] = @work_per_sec
-      status[:work_per_min] = @work_per_min
+      if @work_per_min
+        write_file! :work_rate, '%10g work/min' % (@work_per_min)
+      end
 
       write_file! :work_history do | fh |
         x = {
@@ -332,24 +343,30 @@ module PointyHair
       raise "subclass responsibility"
     end
 
-    def set_status! state = nil, data = nil
-      status.update(data) if data
-      if state
+    def set_status! status = nil, data = nil
+      state.update(data) if data
+      if status or data
         now = Time.now
-        status[:status] = state
-        status[:status_time] = status[:"#{state}_at"] = now
-        write_file! :status, status[:status].to_s
+        state[:pid] ||= pid
+        state[:status] = status
+        state[:status_time] = state[:"#{status}_at"] = now
+        write_file! :status, state[:status].to_s
         procline!
       end
       write_file! :state do | fh |
-        write_yaml(fh, status)
+        write_yaml(fh, state)
       end
     end
 
-    def get_status!
+    def write_status_file! status
+      set_status! status
+      write_file! status, state[:status_time]
+    end
+
+    def get_state!
       read_file! :state do | fh |
         fh.set_encoding("UTF-8")
-        @status = YAML.load(fh.read) || { }
+        @state = YAML.load(fh.read) || { }
       end
     end
 
@@ -379,7 +396,7 @@ module PointyHair
     end
 
     def procline!
-      $0 = "#{@procline_prefix}#{kind}:#{instance}:#{process_count} #{status[:status]} [#{work_id}/#{max_work_id || :*}] #{@work_per_min && ('%5g w/min' % @work_per_min)}"
+      $0 = "#{@procline_prefix}#{kind}:#{instance}:#{process_count} #{state} [#{work_id}/#{max_work_id || :*}] #{@work_per_min && ('%5g w/min' % @work_per_min)}"
     end
   end
 end
