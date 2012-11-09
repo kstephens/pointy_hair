@@ -182,7 +182,7 @@ module PointyHair
     end
 
     def do_work!
-      set_status! :waiting_for_work
+      set_status! :waiting
       if work = get_work!
         status[:work_id] = @work_id += 1
         set_status! :working
@@ -216,7 +216,7 @@ module PointyHair
             h.shift while h.size > 10
             set_status!
           end
-          set_status! :finished_work
+          set_status! :worked
         end
       end
     end
@@ -234,20 +234,21 @@ module PointyHair
     end
 
     def set_status! state = nil, data = nil
+      status.update(data) if data
       if state
         now = Time.now.gmtime
         status[:status] = state
         status[:status_time] = status[:"#{state}_at"] = now
+        write_file! :status, status[:status].to_s
         procline!
       end
-      status.update(data) if data
-      write_file! :status do | fh |
+      write_file! :state do | fh |
         fh.write YAML.dump(status)
       end
     end
 
     def get_status!
-      read_file! :status do | fh |
+      read_file! :state do | fh |
         @status = YAML.load(fh.read) || { }
       end
     end
