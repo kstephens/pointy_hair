@@ -3,29 +3,55 @@ require 'yaml'
 
 module PointyHair
   class Worker
-    attr_accessor :kind, :options, :instance, :pid, :status, :base_dir
-    attr_accessor :paused, :exit_code, :work_id
+    attr_accessor :kind, :options, :instance, :status, :base_dir
+    attr_accessor :paused, :exit_code, :work_id, :max_work_id
+    attr_accessor :pid, :process_count
 
     def to_s
-      "\#<#{self.class} #{kind} #{instance} #{pid} #{status[:status]}>"
+      "\#<#{self.class} #{kind} #{instance} #{pid} #{status[:status]} #{work_id} >"
     end
 
     def initialize
+      @procline_prefix = "pointy_hair "
       @running = false
       @pid = $$
+      @process_count = 0
       @status = { }
       @work_id = 0
+      @exit_code = nil
     end
 
     def clear_status!
       @status = { }
-      set_status! :unknown
+      set_status! :created
     end
 
     def dir; "#{@base_dir}/#{@kind}/#{@instance}/#{@pid}"; end
     def status_file;    "#{dir}/status"; end
     def work_file;      "#{dir}/work"; end
     def last_work_file; "#{dir}/last_work"; end
+
+    def start_process!
+      @process_count += 1
+      self.exit_code = nil
+      begin
+        self.pid = $$
+        clear_status!
+        set_status! :start
+        setup_process!
+        run!
+      rescue ::Exception => exc
+        self.exit_code ||= 1
+        raise exc
+      ensure
+        self.exit_code ||= 0
+        set_status! :exited
+        write_file! :exited do | fh |
+          fh.puts exit_code
+        end
+        Process.exit! exit_code
+      end
+    end
 
     def run!
       set_status! :before_run
@@ -34,9 +60,22 @@ module PointyHair
     ensure
       set_status! :after_run
       after_run!
+      set_status! :exiting
+    end
+
+    def before_run!
+    end
+
+    def after_run!
     end
 
     def setup_process!
+      current_symlink!
+      redirect_stdio!
+      setup_signal_handlers!
+    end
+
+    def redirect_stdio!
       $_stdin ||= $stdin
       $_stdout ||= $stdout
       $_stderr ||= $stderr
@@ -48,10 +87,16 @@ module PointyHair
       STDERR.reopen(File.open("#{dir}/stderr", "a+"))
     end
 
-    def before_run!
-    end
-
-    def after_run!
+    def setup_signal_handlers!
+      Signal.trap('TERM') do
+        stop!
+      end
+      Signal.trap('STOP') do
+        pause!
+      end
+      Signal.trap('CONT') do
+        resume!
+      end
     end
 
     def run_loop
@@ -60,24 +105,52 @@ module PointyHair
       while running?
         check_stop!
         check_paused!
-        if @paused
-          set_status! :paused
-          loop do
-            sleep(5 + rand)
-            check_paused!
-            check_stop!
-            break unless @paused || @stop
-          end
-          set_status! :resumed
-        else
+        unless handle_paused
           set_status! :run_loop
           do_work!
         end
+        check_max_work_id!
       end
-      worker.set_status! :finished
-      worker.write_file! :finished
+      if @stopped
+        stopped!
+      end
+      set_status! :finished
+      write_file! :finished
     ensure
       set_status! :run_loop_end
+    end
+
+    def handle_paused
+      if @paused
+        set_status! :paused
+        paused!
+        loop do
+          sleep(5 + rand)
+          check_paused!
+          check_stop!
+          break unless @paused || @stop
+          set_status! :paused
+        end
+        set_status! :resumed
+        resumed!
+        true
+      end
+    end
+
+    def check_max_work_id!
+      if @max_work_id && @max_work_id > 0 && @max_work_id < @work_id
+        @running = false
+        set_status! :max_work_id_reached
+      end
+    end
+
+    def paused!
+    end
+
+    def resumed!
+    end
+
+    def stopped!
     end
 
     def running?
@@ -91,20 +164,25 @@ module PointyHair
       if opts[:force]
         raise Error::Stop
       end
+      unless file_exists? :stop
+        write_file! :stop, Time.now.gmtime
+      end
     end
 
     def pause!
       @paused = true
+      write_file! :paused, Time.now.gmtime
     end
 
     def resume!
       @paused = false
+      remove_file! :paused
     end
 
     def do_work!
       set_status! :waiting_for_work
       if work = get_work!
-        @work_id += 1
+        status[:work_id] = @work_id += 1
         set_status! :working
         set_work! work
         set_last_work! work
@@ -121,7 +199,8 @@ module PointyHair
           }
           set_status! :error, :error => e
           write_file! :error do | fh |
-            e[:time] = status[:time]
+            e[:work_id] = @work_id
+            e[:time] = status[:status_time]
             fh.write YAML.dump(e)
           end
           raise err
@@ -131,7 +210,7 @@ module PointyHair
             dt = t1 - t0
             status[:work_dt] = dt
             h = status[:work_history] ||= [ ]
-            h << { :time => t1, :dt => dt }
+            h << { :work_id => @work_id, :time => t1, :dt => dt }
             h.shift while h.size > 10
             set_status!
           end
@@ -156,7 +235,7 @@ module PointyHair
       if state
         now = Time.now.gmtime
         status[:status] = state
-        status[:time] = status[:"#{state}_at"] = now
+        status[:status_time] = status[:"#{state}_at"] = now
         procline!
       end
       status.update(data) if data
@@ -185,11 +264,15 @@ module PointyHair
       end
     end
 
-    def write_file! file, &blk
-      log { "write_file! #{file}" }
+    def write_file! file, thing = nil, &blk
+      # log { "write_file! #{file}" }
       file = "#{dir}/#{file}"
       FileUtils.mkdir_p(File.dirname(file))
-      blk ||= lambda { | fh | }
+      case thing
+      when Time
+        thing = thing.iso8601(4)
+      end
+      blk ||= lambda { | fh | fh.puts thing }
       result = File.open(tmp = "#{file}.tmp", "w+", &blk)
       File.chmod(0644, tmp)
       File.rename(tmp, file)
@@ -209,6 +292,12 @@ module PointyHair
       nil
     end
 
+    def remove_file! file
+      file = "#{dir}/#{file}"
+      File.unlink(file)
+    rescue Errno::ENOENT
+    end
+
     def file_exists? file
       file = "#{dir}/#{file}"
       File.exist?(file)
@@ -216,10 +305,13 @@ module PointyHair
 
     def remove_files!
       FileUtils.rm_rf("#{dir}")
+      unless File.exist?(file = current_symlink)
+        File.unlink(file)
+      end
     end
 
     def check_paused!
-      @paused = file_exists?(:pause)
+      @paused = file_exists?(:paused)
     end
 
     def check_stop!
@@ -228,6 +320,16 @@ module PointyHair
       end
     end
 
+    def current_symlink
+      File.expand_path("../current", dir)
+    end
+
+    def current_symlink!
+      file = current_symlink
+      FileUtils.mkdir_p(File.dirname(file))
+      File.unlink(file) rescue nil
+      File.symlink(File.basename(dir), file)
+    end
 
     def log msg = nil
       msg ||= yield if block_given?
@@ -235,7 +337,7 @@ module PointyHair
     end
 
     def procline!
-      $0 = "#{kind}:#{instance} #{status[:status]} [#{work_id}]"
+      $0 = "#{@procline_prefix}#{kind}:#{instance}:#{process_count} #{status[:status]} [#{work_id}/#{max_work_id || :*}]"
     end
   end
 end

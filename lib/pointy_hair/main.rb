@@ -17,7 +17,7 @@ module PointyHair
           }
         }
       }
-      mgr.run!
+      mgr.start_process!
     end
   end
 end
