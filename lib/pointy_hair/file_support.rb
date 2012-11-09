@@ -59,10 +59,14 @@ module PointyHair
     end
 
     def remove_files!
-      FileUtils.rm_rf(dir)
+      begin
+        FileUtils.rm_rf(dir)
+      rescue Errno::ENOENT
+      end
       unless File.exist?(file = current_symlink)
         File.unlink(file)
       end
+    rescue Errno::ENOENT
     end
 
     def current_symlink
