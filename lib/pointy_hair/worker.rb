@@ -10,7 +10,7 @@ module PointyHair
     include FileSupport
     attr_accessor :kind, :options, :instance, :state, :base_dir
     attr_accessor :paused, :work_id, :max_work_id
-    attr_accessor :pid, :process_count, :keep_files
+    attr_accessor :pid, :pid_running, :process_count, :keep_files
     attr_accessor :work, :work_error
 
     def status    ; state[:status]     ; end
@@ -28,6 +28,7 @@ module PointyHair
       @procline_prefix = "pointy_hair "
       @running = false
       @pid = $$
+      @pid_running = nil
       @process_count = 0
       @state = { }
       @work_history = [ ]
@@ -37,7 +38,7 @@ module PointyHair
     end
 
     def pid= x
-      @dir = nil unless x.nil?
+      @dir = nil
       @pid = x
     end
 
@@ -51,10 +52,12 @@ module PointyHair
     end
 
     def start_process!
+      now = Time.now
       @process_count += 1
       self.exit_code = nil
       begin
         self.pid = $$
+        self.pid_running = now
         clear_state!
         set_status! :started
         setup_process!

@@ -109,6 +109,7 @@ module PointyHair
           unless worker = workers.find { | w | w.kind == kind && w.class == cls && w.instance == i }
             worker = cls.new
             worker.pid = nil
+            worker.pid_running = nil
             worker.base_dir = "#{dir}/worker"
             worker.kind = kind
             worker.instance = i
@@ -144,17 +145,19 @@ module PointyHair
     def spawn_workers!
       # log "spawn_workers!"
       workers.each do | worker |
-        unless worker.pid
+        unless worker.pid and worker.pid_running
           spawn_worker! worker
         end
       end
     end
 
     def spawn_worker! worker
+      now = Time.now
       # log { "spawning worker #{worker}" }
       worker.pid = Process.fork do
         worker.start_process!
       end
+      worker.pid_running = now
       log { "spawned worker #{worker}" }
     end
 
@@ -173,6 +176,8 @@ module PointyHair
           worker_set_status! worker, :stuck, now
           # TODO: put work back in!
           worker_exited! worker
+        else
+          worker.pid_running = now
         end
         worker.checked_at = now
         worker.write_file! :checked, now
@@ -191,11 +196,11 @@ module PointyHair
       # log { "queue reap pid #{worker.pid}" }
       @reap_pids.enq(worker.pid)
       worker.exited!
-      worker.pid = nil
+      worker.pid_running = nil
     end
 
     def worker_exited? worker
-      worker.file_exists? :exited
+      worker.file_exists? :exited or ! worker.pid_running
     end
 
     def pause_worker! worker
@@ -247,7 +252,8 @@ module PointyHair
         w = {
           :kind       => worker.kind,
           :instance   => worker.instance,
-          :pid        => worker.state[:pid],
+          :pid        => worker.pid,
+          :pid_running => worker.pid_running,
           :started_at => worker.state[:started_at],
           :checked_at => worker.checked_at,
           :status     => worker.status,
