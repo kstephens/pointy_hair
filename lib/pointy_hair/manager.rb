@@ -85,7 +85,7 @@ module PointyHair
           when :stop
             break
           else
-            Process.waitpid(pid)
+            Process.waitpid(pid) rescue nil
             log { "reaped #{pid}" }
           end
         end
