@@ -8,6 +8,8 @@ describe PointyHair::Worker do
   before(:each) do
     self.base_dir = "./tmp/spec/#{$$}"
     self.w = PointyHair::Worker.new
+    w.kind = :test
+    w.instance = 123
     w.base_dir = base_dir
   end
 
@@ -55,12 +57,26 @@ describe PointyHair::Worker do
     w.exit_code.should == 1234
   end
 
-  it "should initalize state" do
+  it "should initialize state" do
     w.clear_state!
     w.state[:hostname].should == Socket.gethostname
     w.status.should == :created
     w.state[:status_time].should_not == nil
     w.state[:created_at].should == w.state[:status_time]
+  end
+
+  it "should return files relative to #dir" do
+    w.base_dir = "foobar"
+    w.expand_file("baz").should == "foobar/test/123/#{$$}/baz"
+    w.expand_file("/baz").should == "/baz"
+  end
+
+  it "should store state in a YAML file" do
+    state_file = w.expand_file(:state)
+    File.exist?(state_file).should == false
+    w.clear_state!
+    w.status
+    File.exist?(state_file).should == true
   end
 
 end

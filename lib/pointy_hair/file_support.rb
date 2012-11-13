@@ -1,7 +1,13 @@
 module PointyHair
   module FileSupport
     def expand_file file
-      File.expand_path(file.to_s, dir)
+      file = file.to_s
+      case file
+      when %r{^/}
+        file
+      else
+        "#{dir}/#{file}"
+      end
     end
 
     def write_yaml fh, data
