@@ -249,15 +249,11 @@ module PointyHair
       data = { :time => Time.now }
       ws = data[:workers] ||= [ ]
       workers_sorted.each do | worker |
-        w = {
-          :kind       => worker.kind,
-          :instance   => worker.instance,
-          :pid        => worker.pid,
-          :pid_running => worker.pid_running,
-          :started_at => worker.state[:started_at],
-          :checked_at => worker.checked_at,
-          :status     => worker.status,
-        }
+        w = worker.worker_to_Hash
+        w[:started_at] = worker.state[:started_at]
+        w[:checked_at] = worker.checked_at
+        w[:status]     = worker.status
+        w[:dir]        = worker.dir
         if x = worker.exit_code
           w[:exited_at] = worker.state[:exited_at]
           w[:exit_code] = x

@@ -366,7 +366,9 @@ module PointyHair
       state.update(data) if data
       if status or data
         now = Time.now
-        state[:pid] ||= pid
+        unless state[:kind]
+          state.update(worker_to_Hash)
+        end
         state[:status] = status
         state[:status_time] = now
         state[:"#{status}_at"] = now.dup
@@ -377,6 +379,18 @@ module PointyHair
         write_yaml(fh, state)
       end
     end
+
+    def worker_to_Hash
+      h = {
+        :kind       => kind,
+        :instance   => instance,
+        :class      => self.class.name,
+        :pid        => pid,
+        :pid_running => pid_running,
+        :ppid       => ppid,
+      }
+    end
+
 
     def write_status_file! status
       set_status! status
