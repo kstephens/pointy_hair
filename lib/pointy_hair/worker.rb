@@ -45,6 +45,11 @@ module PointyHair
       end
     end
 
+    def pid= x
+      @dir = nil
+      @pid = x
+    end
+
     def infer_pid!
       @pid ||= current_pid
       self
@@ -52,11 +57,6 @@ module PointyHair
 
     def current_pid
       x = current_symlink_value and x.to_i
-    end
-
-    def pid= x
-      @dir = nil
-      @pid = x
     end
 
     def clear_state!
