@@ -84,8 +84,12 @@ module PointyHair
           fh.set_encoding("UTF-8")
           fh.puts exit_code
         end
-        Process.exit! exit_code
+        _exit! exit_code
       end
+    end
+
+    def _exit! code
+      Process.exit! code
     end
 
     def exited!
