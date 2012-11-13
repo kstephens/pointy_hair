@@ -68,6 +68,11 @@ module PointyHair
       @dir ||= "#{@base_dir}/#{@kind}/#{@instance}/#{@pid || '_'}".freeze
     end
 
+    # Called by manaager, before spawning.
+    def before_start_process!
+      @process_count += 1
+    end
+
     def start_process!
       at_start_process!
       run!
@@ -79,7 +84,6 @@ module PointyHair
 
     def at_start_process!
       @now = Time.now
-      @process_count += 1
       self.exit_code = nil
       self.pid = $$
       self.pid_running = @now

@@ -155,6 +155,7 @@ module PointyHair
     def spawn_worker! worker
       now = Time.now
       # log { "spawning worker #{worker}" }
+      worker.before_start_process!
       worker.pid = Process.fork do
         worker.start_process!
       end

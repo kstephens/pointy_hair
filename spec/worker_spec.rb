@@ -103,10 +103,6 @@ describe PointyHair::Worker do
     w.state[:exit_error_at].class.should == NilClass
     w.state[:error].class.should == NilClass
 
-    w.file_exists?(:status).should == true
-    w.file_exists?(:state).should == true
-    File.read(w.expand_file(:status)).should == "exited\n"
-    w.file_exists?(:exited).should == true
     w.file_exists?(:exit_error).should == false
     # pp w.state
   end
@@ -132,10 +128,6 @@ describe PointyHair::Worker do
     w.state[:error][:work_id].should == 0
     w.state[:error][:time].class.should == Time
 
-    w.file_exists?(:status).should == true
-    w.file_exists?(:state).should == true
-    File.read(w.expand_file(:status)).should == "exited\n"
-    w.file_exists?(:exited).should == true
     w.file_exists?(:exit_error).should == true
 
     # pp w.state
@@ -181,6 +173,7 @@ describe PointyHair::Worker do
   end
 
   def start_process!
+    w.before_start_process!
     w.start_process!
 
     w.pid.should == $$
@@ -197,6 +190,10 @@ describe PointyHair::Worker do
     w.state[:started_at].class.should == Time
     w.state[:exited_at].class.should == Time
 
+    w.file_exists?(:status).should == true
+    w.file_exists?(:state).should == true
+    File.read(w.expand_file(:status)).should == "exited\n"
+    w.file_exists?(:exited).should == true
   end
 
 end
