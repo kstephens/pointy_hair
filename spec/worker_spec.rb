@@ -37,6 +37,8 @@ describe PointyHair::Worker do
     w.dir.should == "/tmp/foo/bar/hello/9/#{$$}"
     w.pid = $$ + 1
     w.dir.should == "/tmp/foo/bar/hello/9/#{$$ + 1}"
+    w.pid = nil
+    w.dir.should == "/tmp/foo/bar/hello/9/_"
   end
 
   it "should store #status in status[:status]" do

@@ -51,7 +51,7 @@ module PointyHair
     end
 
     def dir
-      @dir ||= "#{@base_dir}/#{@kind}/#{@instance}/#{@pid}".freeze
+      @dir ||= "#{@base_dir}/#{@kind}/#{@instance}/#{@pid || '_'}".freeze
     end
 
     def start_process!
