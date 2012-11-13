@@ -14,7 +14,8 @@ module PointyHair
       @kind = "manager"
       @instance = 0
       @poll_interval = 5
-      @keep_files = (ENV['POINTY_HAIR_KEEP_FILES'] || '0').to_i > 0
+      @keep_files = (ENV['POINTY_HAIR_KEEP_FILES'] || '0').to_i
+      @keep_files = false unless @keep_files > 0
     end
 
     def reload_config!
