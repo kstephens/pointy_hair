@@ -1,6 +1,6 @@
 # PointyHair
 
-PointHair is a Ruby worker process manager.
+PointyHair is a Ruby worker process manager.
 
 It provides a robust framework for handling worker processes that loop: getting units of work, and working on them.
 Control and status is supplied by simple files in a well-defined directory structure.
