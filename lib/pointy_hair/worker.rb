@@ -271,6 +271,7 @@ module PointyHair
           update_work_status!
         end
       end
+      self
     end
 
     # callback
@@ -378,6 +379,7 @@ module PointyHair
       write_file! :state do | fh |
         write_yaml(fh, state)
       end
+      self
     end
 
     def worker_to_Hash
@@ -395,6 +397,7 @@ module PointyHair
     def write_status_file! status
       set_status! status
       write_file! status, state[:status_time]
+      self
     end
 
     def get_state!
@@ -402,12 +405,14 @@ module PointyHair
         fh.set_encoding("UTF-8")
         @state = YAML.load(fh.read) || { }
       end
+      self
     end
 
     def save_work! work
       write_file! :work do | fh |
         write_yaml(fh, work)
       end
+      self
     end
 
     def save_last_work!
@@ -422,6 +427,7 @@ module PointyHair
       if file_exists?(:stop)
         stop!
       end
+      self
     end
 
     def log msg = nil
