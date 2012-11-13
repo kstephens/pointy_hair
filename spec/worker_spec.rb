@@ -93,29 +93,48 @@ describe PointyHair::Worker do
   it "should initialize state in #start_process" do
     mock_run!
 
-    w.start_process!
+    start_process!
 
-    w.pid.should == $$
-    w.ppid.should == Process.ppid
-    w.pid_running.class.should == Time
-    w.running?.should == nil
-    w.status.should == :exited
-    w.process_count.should == 1
     w.exit_code.should == 0
     self.exit_code.should == 0
-    w.state[:pid].should == w.pid
-    w.state[:status].should == :exited
-    w.state[:status_time].class.should == Time
-    w.state[:created_at].class.should == Time
-    w.state[:started_at].class.should == Time
     w.state[:exit_code].should == 0
-    w.state[:exited_at].class.should == Time
+    w.state[:exit_error_at].class.should == NilClass
+    w.state[:error].class.should == NilClass
 
     w.file_exists?(:status).should == true
     w.file_exists?(:state).should == true
     File.read(w.expand_file(:status)).should == "exited\n"
     w.file_exists?(:exited).should == true
     w.file_exists?(:exit_error).should == false
+    pp w.state
+  end
+
+  it "should rescue errors #start_process" do
+    mock_run!
+    def w.run!
+      raise "Some error in #{__FILE__}"
+    end
+
+    lambda do
+      start_process!
+    end.should raise_error(/Some error in #{__FILE__}/)
+
+    w.exit_code.should == 1
+    self.exit_code.should == 1
+    w.state[:exit_code].should == 1
+    w.state[:exited_at].class.should == Time
+    w.state[:exit_error_at].class.should == Time
+    w.state[:error].class.should == Hash
+    w.state[:error][:class_name].should == "RuntimeError"
+    w.state[:error][:message].should == "Some error in #{__FILE__}"
+    w.state[:error][:work_id].should == 0
+    w.state[:error][:time].class.should == Time
+
+    w.file_exists?(:status).should == true
+    w.file_exists?(:state).should == true
+    File.read(w.expand_file(:status)).should == "exited\n"
+    w.file_exists?(:exited).should == true
+    w.file_exists?(:exit_error).should == true
 
     pp w.state
   end
@@ -142,6 +161,25 @@ describe PointyHair::Worker do
     def w._exit! code
       $this.exit_code = code
     end
+  end
+
+  def start_process!
+    w.start_process!
+
+    w.pid.should == $$
+    w.ppid.should == Process.ppid
+    w.pid_running.class.should == Time
+    w.running?.should == nil
+    w.status.should == :exited
+    w.process_count.should == 1
+
+    w.state[:pid].should == w.pid
+    w.state[:status].should == :exited
+    w.state[:status_time].class.should == Time
+    w.state[:created_at].class.should == Time
+    w.state[:started_at].class.should == Time
+    w.state[:exited_at].class.should == Time
+
   end
 
 end
