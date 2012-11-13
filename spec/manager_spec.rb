@@ -17,6 +17,5 @@ describe PointyHair::Manager do
         }
       }
     }
-    mgr.run!
   end
 end

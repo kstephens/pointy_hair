@@ -106,7 +106,7 @@ describe PointyHair::Worker do
     File.read(w.expand_file(:status)).should == "exited\n"
     w.file_exists?(:exited).should == true
     w.file_exists?(:exit_error).should == false
-    pp w.state
+    # pp w.state
   end
 
   it "should rescue errors #start_process" do
@@ -136,7 +136,7 @@ describe PointyHair::Worker do
     w.file_exists?(:exited).should == true
     w.file_exists?(:exit_error).should == true
 
-    pp w.state
+    # pp w.state
   end
 
   it "should complete all tests" do
