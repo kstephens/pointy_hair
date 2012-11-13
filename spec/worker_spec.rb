@@ -149,6 +149,11 @@ describe PointyHair::Worker do
     w.pid = nil
     w.infer_pid!
     w.pid.should == pid
+
+    File.unlink(w.current_symlink)
+    w.pid = nil
+    w.infer_pid!
+    w.pid.should == nil
   end
 
   it "should complete all tests" do
