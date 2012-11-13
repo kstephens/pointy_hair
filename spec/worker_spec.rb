@@ -91,6 +91,41 @@ describe PointyHair::Worker do
   end
 
   it "should initialize state in #start_process" do
+    mock_run!
+
+    w.start_process!
+
+    w.pid.should == $$
+    w.ppid.should == Process.ppid
+    w.pid_running.class.should == Time
+    w.running?.should == nil
+    w.status.should == :exited
+    w.process_count.should == 1
+    w.exit_code.should == 0
+    self.exit_code.should == 0
+    w.state[:pid].should == w.pid
+    w.state[:status].should == :exited
+    w.state[:status_time].class.should == Time
+    w.state[:created_at].class.should == Time
+    w.state[:started_at].class.should == Time
+    w.state[:exit_code].should == 0
+    w.state[:exited_at].class.should == Time
+
+    w.file_exists?(:status).should == true
+    w.file_exists?(:state).should == true
+    File.read(w.expand_file(:status)).should == "exited\n"
+    w.file_exists?(:exited).should == true
+    w.file_exists?(:exit_error).should == false
+
+    pp w.state
+  end
+
+  it "should complete all tests" do
+    true.should == true
+  end
+
+
+  def mock_run!
     w.pid = -1
     w.pid_running = nil
     w.ppid = -1
@@ -107,25 +142,6 @@ describe PointyHair::Worker do
     def w._exit! code
       $this.exit_code = code
     end
-    w.start_process!
-
-    w.pid.should == $$
-    w.ppid.should == Process.ppid
-    w.pid_running.class.should == Time
-    w.status.should == :exited
-    w.process_count.should == 1
-    w.exit_code.should == 0
-    self.exit_code.should == 0
-
-    w.file_exists?(:status).should == true
-    w.file_exists?(:state).should == true
-    File.read(w.expand_file(:status)).should == "exited\n"
-    w.file_exists?(:exited).should == true
-    w.file_exists?(:exit_error).should == false
-  end
-
-  it "should complete all tests" do
-    true.should == true
   end
 
 end
