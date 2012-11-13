@@ -69,20 +69,18 @@ module PointyHair
     end
 
     def start_process!
-      @now = Time.now
-      @process_count += 1
-      self.exit_code = nil
-      begin
-        at_start_process!
-        run!
-      rescue ::Exception => exc
-        at_process_exception! exc
-      ensure
-        at_end_process!
-      end
+      at_start_process!
+      run!
+    rescue ::Exception => exc
+      at_process_exception! exc
+    ensure
+      at_end_process!
     end
 
     def at_start_process!
+      @now = Time.now
+      @process_count += 1
+      self.exit_code = nil
       self.pid = $$
       self.pid_running = @now
       self.ppid = Process.ppid

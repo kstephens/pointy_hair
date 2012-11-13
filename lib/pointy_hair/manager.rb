@@ -254,7 +254,6 @@ module PointyHair
         w[:started_at] = worker.state[:started_at]
         w[:checked_at] = worker.checked_at
         w[:status]     = worker.status
-        w[:dir]        = worker.dir
         if x = worker.exit_code
           w[:exited_at] = worker.state[:exited_at]
           w[:exit_code] = x
