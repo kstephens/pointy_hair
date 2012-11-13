@@ -1,6 +1,10 @@
 # PointyHair
 
-TODO: Write a gem description
+PointHair is a Ruby worker process manager.
+
+It provides a robust framework for handling worker processes that loop: getting units of work, and working on them.
+Control and status is supplied by simple files in a well-defined directory structure.
+Signals sent to PointyHair::Manager processes are propagated to workers in a sane manner.
 
 ## Installation
 
@@ -18,7 +22,26 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+
+    mgr = PointyHair::Manager.new
+    mgr.worker_config = {
+      :kind_1 => {
+        :class => 'PointyHair::Worker::Test',
+        :enabled => true,
+        :instances => 2,
+        :options => {
+          :a => 1,
+          :b => 2,
+        }
+      }
+    }
+    mgr.run!
+
+## TODO
+
+* Support max_idle_time, worker #run_loop! should exit if #get_work! does not complete in max_idle_time.
+* Worker process should spawn thread to check on reparenting, and call #stop! and/or abort current work.
+* Support a simple web interface.
 
 ## Contributing
 
