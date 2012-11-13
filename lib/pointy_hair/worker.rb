@@ -40,6 +40,15 @@ module PointyHair
       @pause_interval = 5
     end
 
+    def infer_pid!
+      @pid ||= current_pid
+      self
+    end
+
+    def current_pid
+      x = current_symlink_value and x.to_i
+    end
+
     def pid= x
       @dir = nil
       @pid = x

@@ -141,6 +141,16 @@ describe PointyHair::Worker do
     # pp w.state
   end
 
+  it "should infer pid from current symlink." do
+    mock_run!
+    w.current_symlink!
+
+    pid = w.pid
+    w.pid = nil
+    w.infer_pid!
+    w.pid.should == pid
+  end
+
   it "should complete all tests" do
     true.should == true
   end

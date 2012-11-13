@@ -85,5 +85,12 @@ module PointyHair
       File.unlink(file) rescue nil
       File.symlink(File.basename(dir), file)
     end
+
+    def current_symlink_value
+      File.readlink(current_symlink)
+    rescue Errno::ENOENT
+      nil
+    end
+
   end
 end
