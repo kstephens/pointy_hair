@@ -8,11 +8,14 @@ require 'pointy_hair/file_support'
 module PointyHair
   class Worker
     include FileSupport
-    attr_accessor :kind, :options, :instance, :state, :base_dir
+    attr_accessor :kind, :options, :instance, :base_dir
     attr_accessor :paused, :work_id, :max_work_id
-    attr_accessor :pid, :pid_running, :process_count, :keep_files
+    attr_accessor :pid, :pid_running, :ppid
+    attr_accessor :process_count, :keep_files, :pause_interval
     attr_accessor :work, :work_error
+    attr_accessor :work_history
 
+    def state     ; @state; end
     def status    ; state[:status]     ; end
     def status= x ; state[:status] = x ; end
     def checked_at   ; @checked_at ; end
@@ -28,12 +31,12 @@ module PointyHair
       @procline_prefix = "pointy_hair "
       @running = false
       @pid = $$
+      @ppid = Process.ppid
       @pid_running = nil
       @process_count = 0
       @state = { }
       @work_history = [ ]
       @work_id = 0
-      @exit_code = nil
       @pause_interval = 5
     end
 
@@ -58,6 +61,7 @@ module PointyHair
       begin
         self.pid = $$
         self.pid_running = now
+        self.ppid = Process.ppid
         clear_state!
         set_status! :started
         setup_process!
@@ -159,8 +163,15 @@ module PointyHair
         stopped!
       end
       write_status_file! :finished
+      check_ppid!
     ensure
       set_status! :run_loop_end
+    end
+
+    def check_ppid!
+      if ppid != Process.ppid
+        stop!
+      end
     end
 
     def handle_paused
@@ -171,6 +182,7 @@ module PointyHair
           sleep(@pause_interval + rand)
           check_paused!
           check_stop!
+          check_ppid!
           break unless @paused || @stop
           set_status! :paused
         end
@@ -352,7 +364,8 @@ module PointyHair
         now = Time.now
         state[:pid] ||= pid
         state[:status] = status
-        state[:status_time] = state[:"#{status}_at"] = now
+        state[:status_time] = now
+        state[:"#{status}_at"] = now.dup
         write_file! :status, state[:status].to_s
         procline!
       end
