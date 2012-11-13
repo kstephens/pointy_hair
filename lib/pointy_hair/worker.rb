@@ -27,7 +27,7 @@ module PointyHair
       "\#<#{self.class} #{kind} #{instance} #{pid} #{status} #{work_id} >"
     end
 
-    def initialize
+    def initialize opts = nil
       @procline_prefix = "pointy_hair "
       @running = nil
       @pid = $$
@@ -38,6 +38,11 @@ module PointyHair
       @work_history = [ ]
       @work_id = 0
       @pause_interval = 5
+      if opts
+        opts.each do | k, v|
+          send("#{k}=", v)
+        end
+      end
     end
 
     def infer_pid!
