@@ -69,37 +69,50 @@ module PointyHair
     end
 
     def start_process!
-      now = Time.now
+      @now = Time.now
       @process_count += 1
       self.exit_code = nil
       begin
-        self.pid = $$
-        self.pid_running = now
-        self.ppid = Process.ppid
-        clear_state!
-        set_status! :started
-        setup_process!
+        at_start_process!
         run!
       rescue ::Exception => exc
-        self.exit_code ||= 1
-        e = make_error_hash(exc)
-        set_status! :exit_error, :error => e
-        write_file! :exit_error do | fh |
-          fh.set_encoding("UTF-8")
-          e[:work_id] = @work_id
-          e[:time] = state[:status_time]
-          write_yaml(fh, e)
-        end
-        raise exc
+        at_process_exception! exc
       ensure
-        self.exit_code ||= 0
-        set_status! :exited
-        write_file! :exited do | fh |
-          fh.set_encoding("UTF-8")
-          fh.puts exit_code
-        end
-        _exit! exit_code
+        at_end_process!
       end
+    end
+
+    def at_start_process!
+      self.pid = $$
+      self.pid_running = @now
+      self.ppid = Process.ppid
+      clear_state!
+      set_status! :started
+      setup_process!
+      self
+    end
+
+    def at_process_exception! exc
+      self.exit_code ||= 1
+      e = make_error_hash(exc)
+      set_status! :exit_error, :error => e
+      write_file! :exit_error do | fh |
+        fh.set_encoding("UTF-8")
+        e[:work_id] = @work_id
+        e[:time] = state[:status_time]
+        write_yaml(fh, e)
+      end
+      raise exc
+    end
+
+    def at_end_process!
+      self.exit_code ||= 0
+      set_status! :exited
+      write_file! :exited do | fh |
+        fh.set_encoding("UTF-8")
+        fh.puts exit_code
+      end
+      _exit! exit_code
     end
 
     def _exit! code
