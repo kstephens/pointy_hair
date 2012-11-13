@@ -162,19 +162,30 @@ module PointyHair
     end
 
     def setup_signal_handlers!
-      Signal.trap('INT') do
-        log { "SIGINT" }
+      set_signal_handler!('INT') do
         stop!
       end
-      Signal.trap('TERM') do
+      set_signal_handler!('TERM') do
         stop!
       end
-      Signal.trap('STOP') do
+      set_signal_handler!('STOP') do
         pause!
       end
-      Signal.trap('CONT') do
+      set_signal_handler!('CONT') do
         resume!
       end
+    end
+
+    def set_signal_handler! name
+      @old_signal_handlers ||= { }
+      name = name.to_s
+      @old_signal_handlers[name] ||= Signal.trap(name) do
+        log { "SIG#{name}" }
+        write_file! :signal, name
+        set_status! :signal, :signal => name
+        yield
+      end
+      self
     end
 
     def run_loop
@@ -418,6 +429,7 @@ module PointyHair
         :pid        => pid,
         :pid_running => pid_running,
         :ppid       => ppid,
+        :dir        => dir,
       }
     end
 
