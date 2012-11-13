@@ -188,19 +188,20 @@ module PointyHair
           get_and_do_work!
         end
         check_max_work_id!
+        check_ppid!
       end
       if @stopped
         write_status_file! :stopped
         stopped!
       end
       write_status_file! :finished
-      check_ppid!
     ensure
       set_status! :run_loop_end
     end
 
     def check_ppid!
-      if ppid != Process.ppid
+      if ppid != (current_ppid = Process.ppid)
+        write_status_file! :parent_changed
         stop!
       end
     end
