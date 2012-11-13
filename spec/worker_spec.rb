@@ -23,7 +23,7 @@ describe PointyHair::Worker do
     w.ppid.should == Process.ppid
     w.process_count.should == 0
     w.work_history.should == [ ]
-    w.running?.should == false
+    w.running?.should == nil
     w.exit_code.should == nil
     w.pause_interval.should == 5
     w.state.should == { }

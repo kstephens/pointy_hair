@@ -29,7 +29,7 @@ module PointyHair
 
     def initialize
       @procline_prefix = "pointy_hair "
-      @running = false
+      @running = nil
       @pid = $$
       @ppid = Process.ppid
       @pid_running = nil
