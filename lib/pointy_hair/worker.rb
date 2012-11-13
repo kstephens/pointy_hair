@@ -463,7 +463,7 @@ module PointyHair
     end
 
     def procline!
-      $0 = "#{@procline_prefix}#{kind}:#{instance}:#{process_count} #{state} [#{work_id}/#{max_work_id || :*}] #{@work_per_min && ('%5g w/min' % @work_per_min)}"
+      $0 = "#{@procline_prefix}#{kind}:#{instance}:#{process_count} #{status} [#{work_id}/#{max_work_id || :*}] #{@work_per_min && ('%5g w/min' % @work_per_min)}"
     end
   end
 end
