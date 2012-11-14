@@ -118,6 +118,28 @@ END
       t1 and t0 and t1 > t0 and t1 - t0
     end
 
+    def write_ps!
+      write_file! :ps do | fh |
+        write_yaml(fh, ps)
+      end
+
+      hist = ps_history
+      hist.unshift ps
+      while hist.size > 10
+        hist.pop
+      end
+
+      h = {
+        :time => ps[:time],
+        :ps => ps,
+        :history => hist,
+      }
+      write_file! :ps_history do | fh |
+        write_yaml(fh, h)
+      end
+      self
+    end
+
     def set_status! status = nil, data = nil
       state.update(data) if data
       if status or data

@@ -44,6 +44,7 @@ module PointyHair
       make_workers!
       prune_workers!
       spawn_workers!
+      ps_workers!
       check_workers!
       write_workers_status!
       show_workers! if @verbose
@@ -449,18 +450,44 @@ module PointyHair
       @class_cache[name] = cls
     end
 
-    def get_child_pids pid = nil
+    def ps_workers!
+      now = Time.now
+      get_child_ps.each do | ps, worker |
+        ps[:time] = now
+        worker.ps = ps
+        worker.write_ps!
+      end
+    end
+
+    def get_child_ps pid = nil
       pid ||= self.pid
-      # -x OS X
-      lines = `ps -x -o pid,ppid,pgid,uid,gid,ruid,rgid,pcpu,pmem,tty,xstat,command`.split("\n").map{|l| l.strip.split(/\s+/)}
-      header = lines.shift.map{|k| k.downcase.to_sym}
+
       out = [ ]
+
+      case RUBY_PLATFORM
+      when /linux/i
+        ps_cmd = "/bin/ps -e -o"
+      when /darwin/i
+        # -x OS X
+        ps_cmd = "/bin/ps -x -o"
+      else
+        return out
+      end
+
+      lines = `#{ps_cmd} pid,ppid,pgid,uid,gid,ruid,rgid,pcpu,pmem,tty,xstat,command`.split("\n").map{|l| l.strip.split(/\s+/)}
+      header = lines.shift.map{|k| k.downcase.to_sym}
+      k_map = {
+        :tt => :tty,
+        :'%cpu' => :pcpu,
+        :'%mem' => :pmem,
+      }
+      header.map! { | k | k_map[k] || k }
       lines.each do | f |
         h = { }
         header.each_with_index do | k, i |
           v = f[i]
           case k
-          when :'%cpu', :'%mem'
+          when :pcpu, :pmem
             v = v.to_f
           when :pid, :ppid, :pgid, :uid, :gid, :ruid, :rgid
             v = v.to_i
@@ -468,8 +495,7 @@ module PointyHair
           h[k] = v
         end
         if h[:ppid] == pid and worker = workers.find{|w| w.pid == h[:pid] }
-          h[:worker] = worker
-          out << h
+          out << [ h, worker ]
         end
         h
       end

@@ -15,6 +15,7 @@ module PointyHair
     attr_accessor :process_count, :keep_files
     attr_accessor :work, :work_error
     attr_accessor :work_history
+    attr_accessor :ps, :ps_history
     attr_accessor :exited
 
     def state     ; @state; end
@@ -45,7 +46,6 @@ module PointyHair
       raise "subclass responsibility"
     end
 
-
     def initialize opts = nil
       @options = { }
       @state = { }
@@ -55,6 +55,8 @@ module PointyHair
       @pid_running = nil
       @process_count = 0
       @work_history = [ ]
+      @ps = nil
+      @ps_history = [ ]
       self.work_id = 0
       @pause_interval = 5
       if opts
