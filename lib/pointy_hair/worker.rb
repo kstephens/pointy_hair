@@ -202,6 +202,7 @@ module PointyHair
       set_status! :run_loop_begin
       @running = true
       while running?
+        @loop_t0 = Time.now
         check_stop!
         check_paused!
         unless handle_paused
@@ -317,6 +318,7 @@ module PointyHair
           work_error! exc
           raise err
         ensure
+          @loop_t1 = Time.now
           update_work_status!
         end
       end
@@ -354,15 +356,19 @@ module PointyHair
 
       h = {
         :work_id   => @work_id,
+        :loop_time => @loop_t0,
         :wait_time => @wait_t0,
         :work_time => @work_t0,
+        :loop_dt   => state[:loop_dt] = @loop_dt = dt(@loop_t0, @loop_t1),
+        :wait_dt   => state[:wait_dt] = @wait_dt = dt(@wait_t0, @wait_t1),
         :work_dt   => state[:work_dt] = @work_dt = dt(@work_t0, @work_t1),
-        :wait_dt   => state[:wait_dt] = @wait_dt = dt(@wait_t0, @work_t1),
         :work_error => err && err.inspect,
       }
       wh = @work_history
       wh.unshift h
       wh.pop while wh.size > 10
+
+      state[:loop_dt]      = @loop_dt
 
       t0 = wh[-1][:work_time]
       t1 = h[:work_time]
@@ -377,6 +383,7 @@ module PointyHair
       write_file! :work_history do | fh |
         x = {
           :time => @work_t0,
+          :loop_dt      => @loop_dt,
           :work_per_sec => @work_per_sec,
           :work_per_min => @work_per_min,
           :history => wh,
