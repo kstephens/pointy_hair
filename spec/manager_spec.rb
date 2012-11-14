@@ -163,25 +163,52 @@ describe PointyHair::Manager do
     m.workers.size.should == 2
   end
 
-  it 'should pause workers' do
+  it 'should pause and resume workers' do
     def m.get_work!
       log "get_work! #{work_id}"
       case
       when work_id < 5
         w = find_worker(:kind_1, 0)
-        w.paused.class.should == NilClass if w
+        if w
+          w.paused.class.should == NilClass
+          w.file_exists?(:paused).should == false
+          w.file_exists?(:resumed).should == false
+        end
       when work_id == 5
         w = find_worker(:kind_1, 0)
         log "pause! #{w}"
+        w.file_exists?(:paused).should == false
+        w.file_exists?(:resumed).should == false
         w.pause!
-        w.wait_until_paused!
+        w.wait_until! :paused
+        w.get_state!
         w.paused.class.should == Time
-        w[:last_work_id] = w.work_id
+        w[:pause_work_id] = w.work_id
+        w.file_exists?(:paused).should == true
+        w.file_exists?(:resumed).should == false
       when work_id < 15
         w = find_worker(:kind_1, 0)
         w.paused.class.should == Time
-        w[:last_work_id].should == w.work_id
-      when work_id >= 15
+        w.work_id.should == w[:pause_work_id]
+      when work_id == 15
+        w = find_worker(:kind_1, 0)
+        w.resume!
+        w.wait_until! :resumed
+        w.get_state!
+        w.resumed.class.should == Time
+        w.file_exists?(:paused).should == false
+        w.file_exists?(:resumed).should == true
+        w.state.should_not == :paused
+        until w.work_id > w[:pause_work_id]
+          sleep 0.5
+          w.get_state!
+        end
+      when work_id < 20
+        w = find_worker(:kind_1, 0)
+        w.work_id.should > w[:pause_work_id]
+      when work_id >= 20
+        w = find_worker(:kind_1, 0)
+        w.state.should_not == :paused
         log "stop!"
         stop!
       end

@@ -22,23 +22,6 @@ module PointyHair
       self.pause = file_exists?(:pause)
     end
 
-    # Called from Manager.
-    def wait_until_paused!
-      until paused
-        get_state!
-        sleep 0.25
-      end
-      self
-    end
-
-    def wait_until_resumed!
-      while paused
-        get_state!
-        sleep 0.25
-      end
-      self
-    end
-
     def handle_pausing
       if pause
         at_pause!

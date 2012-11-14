@@ -138,6 +138,12 @@ END
       self
     end
 
+    def wait_until! status
+      until file_exists?(status)
+        sleep 0.5
+      end
+    end
+
     def worker_to_Hash
       h = {
         :kind       => kind,
