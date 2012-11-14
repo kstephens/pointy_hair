@@ -92,7 +92,7 @@ module PointyHair
       set_signal_handler!('TERM') do
         stop!
       end
-      set_signal_handler!('STOP') do
+      set_signal_handler!('TSTP') do
         pause!
       end
       set_signal_handler!('CONT') do
