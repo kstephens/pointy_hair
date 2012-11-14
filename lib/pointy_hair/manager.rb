@@ -261,7 +261,7 @@ module PointyHair
     end
 
     def at_worker_max_age! worker
-      worker.write_file! :max_worker_time, now
+      worker.write_file! :max_age, now
       worker.stop!
       log { "worker_max_age! #{worker}" }
       worker_max_age! worker
