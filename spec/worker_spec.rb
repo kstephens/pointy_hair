@@ -6,7 +6,7 @@ describe PointyHair::Worker do
   attr_accessor :w, :base_dir, :exit_code
 
   before(:each) do
-    self.base_dir = File.expand_path("../../tmp/spec/#{File.basename(__FILE__)}/#{$$}", __FILE__)
+    self.base_dir = File.expand_path("../../tmp/spec/#{File.basename(__FILE__)}", __FILE__)
     self.w = PointyHair::Worker.new
     w.kind = :test
     w.instance = 123
