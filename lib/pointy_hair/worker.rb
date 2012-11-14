@@ -8,7 +8,8 @@ require 'pointy_hair/state_support'
 module PointyHair
   class Worker
     include FileSupport, StopSupport, PauseSupport, ProcessSupport, StateSupport
-    attr_accessor :kind, :options, :instance, :base_dir, :logger
+    attr_accessor :kind, :instance
+    attr_accessor :config, :options, :base_dir, :logger
     attr_accessor :max_work_id
     attr_accessor :pid, :pid_running, :ppid
     attr_accessor :process_count, :keep_files

@@ -7,6 +7,7 @@ module PointyHair
       self.options ||= { }
       self.exited = false
       @process_count += 1
+      clear_state!
     end
 
     def start_process!
@@ -23,7 +24,6 @@ module PointyHair
       self.pid = $$
       self.pid_running = @status_now
       self.ppid = Process.ppid
-      clear_state!
       self.exit_code = nil
       self.work_id = 0
       set_status! :started

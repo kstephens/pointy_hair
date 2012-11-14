@@ -16,6 +16,7 @@ module PointyHair
         def #{n}    ; state[#{n.inspect}]              ; end
         def #{n}= x ; @_#{n} = state[#{n.inspect}] = x ; end
         def _#{n}   ; @_#{n}                           ; end
+        def _#{n}=x ; @_#{n} = x                       ; end
 END
         end * "\n")
       end

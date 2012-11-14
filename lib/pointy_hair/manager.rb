@@ -152,6 +152,7 @@ module PointyHair
             worker_created! worker
             log { "created worker #{worker}" }
           end
+          worker.config  = cfg
           worker.options = cfg[:options]
           worker.keep_files = keep_files
         end
@@ -206,8 +207,11 @@ module PointyHair
 
     def spawn_worker! worker
       now = Time.now
-      # log { "spawning worker #{worker}" }
+      # log { "spawning worker #{worker}" }'
+      worker.stopping = worker.exited = false
       worker.before_start_process!
+      worker.status = :starting
+      worker.state[:starting_at] = now
       worker.ppid = $$
       worker.pid = Process.fork do
         worker.start_process!
@@ -223,6 +227,7 @@ module PointyHair
 
     def check_workers!
       running = [ ]
+      stopping = [ ]
       (workers + @workers_pruned).each do | worker |
         # log { "checking worker #{worker}" }
         worker.get_state!
@@ -236,15 +241,20 @@ module PointyHair
           when process_exists?(worker.pid) && process_terminated?(worker.pid)
             # process disappeared
             at_worker_died! worker
-          when worker_max_age?(worker)
-            at_worker_max_age! worker
-          when worker_stuck?(worker)
-            # process stuck
-            worker_stuck! worker
+          when worker_stopping?(worker)
+            stopping << worker
           else
             # process running
             running << worker
             worker.pid_running = now
+            case
+            when worker_max_age?(worker)
+              # Worker is too old
+              at_worker_max_age! worker
+            when worker_stuck?(worker)
+              # process stuck
+              worker_stuck! worker
+            end
           end
           worker.checked_at = now
           worker.write_file! :checked, now
@@ -252,17 +262,26 @@ module PointyHair
         # pp worker
       end
       @workers_running = running
+      @workers_stopping = stopping
+    end
+
+    def worker_stopping? worker
+      worker._stopping || worker.stopping
     end
 
     def worker_max_age? worker
-      if max_age = worker.options[:max_age] and max_age <= dt(worker.state[:started_at], now = Time.now) || 0
-        true
+      if max_age = worker.config[:max_age] and max_age <= (dt = dt(worker.state[:starting_at], @status_now || Time.now) || 0)
+        max_age = true
+      else
+        max_age = false
       end
+      # puts "  #{worker.pid} #{state[:started_at].iso8601(4)} #{dt} => #{max_age}"
+      max_age
     end
 
     def at_worker_max_age! worker
-      worker.write_file! :max_age, now
-      worker.stop!
+      worker.write_file! :max_age, @status_now
+      stop_worker! worker
       log { "worker_max_age! #{worker}" }
       worker_max_age! worker
     end
@@ -282,12 +301,13 @@ module PointyHair
     def at_worker_exit! worker
       unless worker.exited
         log { "worker exited #{worker.pid} #{worker.exit_code}" }
-        @workers_pruned.delete(worker)
         worker.exited = true
-        # if it disappeared, there is no process to reap.
-        unless worker.status == :died
-          @reap_pids.enq([worker.pid, worker])
-        end
+        worker._stopping = false
+        @workers_pruned.delete(worker)
+        # if it died, there is no process to reap.
+        #unless worker.status == :died
+        #  @reap_pids.enq([worker.pid, worker])
+        #end
         worker.pid_running = nil
         worker_exited! worker
       end
@@ -305,11 +325,13 @@ module PointyHair
     end
 
     def at_worker_died! worker
-      worker.exit_code ||= -1
-      worker_set_status! worker, :died, @status_now
-      log { "worker_died! #{worker}" }
-      worker_died! worker
-      at_worker_exit! worker
+      unless worker.exited
+        worker.exit_code ||= -1
+        worker_set_status! worker, :died, @status_now
+        log { "worker_died! #{worker}" }
+        worker_died! worker
+        at_worker_exit! worker
+      end
     end
 
     # Callback
@@ -331,7 +353,7 @@ module PointyHair
     end
 
     def stop_worker! worker
-      unless worker.exited
+      unless worker.exited or worker._stopping
         worker.stop!
         # Process.kill('TERM', worker.pid)
       end
