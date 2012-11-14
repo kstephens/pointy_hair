@@ -1,3 +1,4 @@
+# -- encoding : utf-8 --
 require 'socket' # gethostname
 require 'fileutils'
 require 'yaml'

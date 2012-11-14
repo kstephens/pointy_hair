@@ -1,3 +1,5 @@
+# -- encoding : utf-8 --
+
 module PointyHair
   module PauseSupport
     attr_accessor :pause_interval
