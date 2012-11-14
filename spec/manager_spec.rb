@@ -60,6 +60,11 @@ describe PointyHair::Manager do
       @_n_died += 1
       super
     end
+    def m.worker_max_age! worker
+      @_n_max_age ||= 0
+      @_n_max_age += 1
+      super
+    end
 
     m.options[:redirect_stdio] = false
     m.options[:setup_signal_handlers] = false
@@ -129,6 +134,28 @@ describe PointyHair::Manager do
     m.instance_variable_get("@_n_pruned").should == 1
     m.instance_variable_get("@_n_died").should >= 1
     m.instance_variable_get("@_n_exited").should == 4
+    m.workers.size.should == 2
+  end
+
+  it 'should restart workers after max_age' do
+    m.worker_config[:kind_1][:max_age] = 3
+    def m.get_work!
+      log "get_work! #{work_id}"
+      case
+      when work_id >= 20
+        log "stop!"
+        stop!
+      end
+      super
+    end
+
+    start_manager!
+
+    m.instance_variable_get("@_n_max_age").should > 0
+    m.instance_variable_get("@_n_spawned").should > 2
+    m.instance_variable_get("@_n_pruned").should == 0
+    m.instance_variable_get("@_n_died").should == 0
+    m.instance_variable_get("@_n_exited").should > 2
     m.workers.size.should == 2
   end
 

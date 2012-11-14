@@ -236,6 +236,8 @@ module PointyHair
           when process_exists?(worker.pid) && process_terminated?(worker.pid)
             # process disappeared
             at_worker_died! worker
+          when worker_max_age?(worker)
+            at_worker_max_age! worker
           when worker_stuck?(worker)
             # process stuck
             worker_stuck! worker
@@ -251,6 +253,24 @@ module PointyHair
       end
       @workers_running = running
     end
+
+    def worker_max_age? worker
+      if max_age = worker.options[:max_age] and max_age <= dt(worker.state[:started_at], now = Time.now) || 0
+        true
+      end
+    end
+
+    def at_worker_max_age! worker
+      worker.write_file! :max_worker_time, now
+      worker.stop!
+      log { "worker_max_age! #{worker}" }
+      worker_max_age! worker
+    end
+
+    # Callback
+    def worker_max_age! worker
+    end
+
 
     def worker_set_status! worker, state, now, data = nil
       log { "worker #{state} #{worker.pid}" }
