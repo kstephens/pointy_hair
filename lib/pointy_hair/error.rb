@@ -1,7 +1,13 @@
 # -- encoding : utf-8 --
 module PointyHair
-  class Error < ::Exception
-    class Internal < self; end
-    class Stop < self; end
+  module Error
+    class Base
+      include Error
+    end
+    class Internal < Base; end
+    class Stop < Base; end
+    class Interrupt < ::Interrupt
+      include Error
+    end
   end
 end

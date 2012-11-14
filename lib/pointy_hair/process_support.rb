@@ -88,6 +88,7 @@ module PointyHair
     def setup_signal_handlers!
       set_signal_handler!('INT') do
         stop!
+        raise Error::Interrupt
       end
       set_signal_handler!('TERM') do
         stop!
