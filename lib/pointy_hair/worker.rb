@@ -317,7 +317,7 @@ module PointyHair
           @work_t1 = Time.now
           @work_error = exc
           work_error! exc
-          raise err
+          raise exc
         ensure
           @loop_t1 = Time.now
           update_work_status!
