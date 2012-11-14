@@ -397,7 +397,7 @@ module PointyHair
     end
 
     def dt t0, t1
-      t1 && t0 && t1 - t0
+      t1 and t0 and t1 > t0 and t1 - t0
     end
 
     def get_work!
