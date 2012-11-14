@@ -208,6 +208,7 @@ module PointyHair
       now = Time.now
       # log { "spawning worker #{worker}" }
       worker.before_start_process!
+      worker.ppid = $$
       worker.pid = Process.fork do
         worker.start_process!
       end
@@ -225,22 +226,27 @@ module PointyHair
       (workers + @workers_pruned).each do | worker |
         # log { "checking worker #{worker}" }
         worker.get_state!
-        now = Time.now
-        case
-        when worker_exited?(worker)            # clean
-          at_worker_exit! worker
-        when ! process_exists?(worker.pid)     # process disappeared
-          worker.exit_code ||= -1
-          worker_set_status! worker, :died, now
-          at_worker_exit! worker
-        when worker_stuck?(worker)             # process stuck
-          worker_stuck! worker
-        else                                   # process running
-          running << worker
-          worker.pid_running = now
+        now = @status_now = Time.now
+        update = true
+        if worker.pid_running
+          case
+          when worker_exited?(worker)
+            # clean exit
+            at_worker_exit! worker
+          when process_exists?(worker.pid) && process_terminated?(worker.pid)
+            # process disappeared
+            at_worker_died! worker
+          when worker_stuck?(worker)
+            # process stuck
+            worker_stuck! worker
+          else
+            # process running
+            running << worker
+            worker.pid_running = now
+          end
+          worker.checked_at = now
+          worker.write_file! :checked, now
         end
-        worker.checked_at = now
-        worker.write_file! :checked, now
         # pp worker
       end
       @workers_running = running
@@ -278,6 +284,18 @@ module PointyHair
         worker.file_exists? :exited
     end
 
+    def at_worker_died! worker
+      worker.exit_code ||= -1
+      worker_set_status! worker, :died, @status_now
+      log { "worker_died! #{worker}" }
+      worker_died! worker
+      at_worker_exit! worker
+    end
+
+    # Callback
+    def worker_died! worker
+    end
+
     def pause_worker! worker
       worker.pause!
     end
@@ -308,10 +326,16 @@ module PointyHair
 
     def process_exists? pid
       Process.kill(0, pid)
+    rescue Errno::EPERM
       true
-    rescue
-      Errno::ESRCH
+    rescue Errno::ESRCH
       false
+    end
+
+    def process_terminated? pid
+      Process.waitpid(pid, Process::WNOHANG) == pid
+    rescue Errno::ECHILD
+      true
     end
 
     def worker_stuck? worker

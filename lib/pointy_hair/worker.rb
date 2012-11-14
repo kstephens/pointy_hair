@@ -175,6 +175,12 @@ module PointyHair
     def work_error! err
     end
 
+    def kill! signal = 'INT'
+      if pid_running
+        Process.kill(signal, pid)
+      end
+    end
+
     def log msg = nil
       if @logger
         msg ||= yield if block_given?

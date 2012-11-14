@@ -40,6 +40,27 @@ describe PointyHair::Manager do
       end
       super
     end
+    def m.worker_spawned! worker
+      @_n_spawned ||= 0
+      @_n_spawned += 1
+      super
+    end
+    def m.worker_pruned! worker
+      @_n_pruned ||= 0
+      @_n_pruned += 1
+      super
+    end
+    def m.worker_exited! worker
+      @_n_exited ||= 0
+      @_n_exited += 1
+      super
+    end
+    def m.worker_died! worker
+      @_n_died ||= 0
+      @_n_died += 1
+      super
+    end
+
     m.options[:redirect_stdio] = false
     m.options[:setup_signal_handlers] = false
     m.logger = false
@@ -86,21 +107,6 @@ describe PointyHair::Manager do
   end
 
   it 'should spawn and prune workers' do
-    def m.worker_spawned! worker
-      @_n_spawned ||= 0
-      @_n_spawned += 1
-      super
-    end
-    def m.worker_pruned! worker
-      @_n_pruned ||= 0
-      @_n_pruned += 1
-      super
-    end
-    def m.worker_exited! worker
-      @_n_exited ||= 0
-      @_n_exited += 1
-      super
-    end
     def m.get_work!
       log "get_work! #{work_id}"
       case
@@ -108,18 +114,21 @@ describe PointyHair::Manager do
         worker_config[:kind_1][:instances] += 1
       when work_id == 15
         worker_config[:kind_1][:instances] -= 1
-      when work_id >= 20
+      when work_id == 17
+        find_worker(:kind_1, 0).kill!(9)
+      when work_id >= 25
         log "stop!"
         stop!
       end
       super
     end
-
+    @dont_check_exit_codes = true
     start_manager!
 
-    m.instance_variable_get("@_n_spawned").should == 3
+    m.instance_variable_get("@_n_spawned").should == 4
     m.instance_variable_get("@_n_pruned").should == 1
-    m.instance_variable_get("@_n_exited").should == 3
+    m.instance_variable_get("@_n_died").should >= 1
+    m.instance_variable_get("@_n_exited").should == 4
     m.workers.size.should == 2
   end
 
@@ -160,8 +169,10 @@ describe PointyHair::Manager do
   def start_manager!
     m.go!
     m.exit_code.should == 0
-    m.workers.each do | w |
-      w.exit_code.should == 0
+    unless @dont_check_exit_codes
+      m.workers.each do | w |
+        w.exit_code.should == 0
+      end
     end
   end
 
