@@ -8,7 +8,7 @@ module PointyHair
       end
 
       def get_work!
-        sleep(1 + rand)
+        sleep(0.25 + rand * 0.25)
         if file_exists?(old_work_file)
           @counter = get_old_work! || 0
         else
@@ -17,7 +17,7 @@ module PointyHair
       end
 
       def work! work
-        sleep(1 + rand)
+        sleep(0.25 + rand * 0.25)
         $_stdout.puts "#{Time.now.iso8601(4)} #{self} => #{work}"
         write_file! "output" do | fh |
           fh.puts work.to_s
