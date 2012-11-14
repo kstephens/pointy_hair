@@ -72,9 +72,10 @@ module PointyHair
     end
 
     def stopped!
-      #workers.each do | w |
-      #  stop_worker! w
-      #end
+      log { "stopped!: stopping workers" }
+      workers.each do | w |
+        stop_worker! w
+      end
       super
     end
 
