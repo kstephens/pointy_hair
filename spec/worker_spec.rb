@@ -208,7 +208,12 @@ describe PointyHair::Worker do
     w.file_exists?(:status).should == true
     w.file_exists?(:state).should == true
     File.read(w.expand_file(:status)).should == "exited\n"
+    w.read_file!(:status).should == "exited\n"
     w.file_exists?(:exited).should == true
+
+    w.exit_code.should be_a(Integer)
+    w.file_exists?(:exit_code).should == true
+    w.read_file!(:exit_code).should == "#{w.exit_code}\n"
   end
 
 end

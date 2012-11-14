@@ -200,7 +200,15 @@ describe PointyHair::Manager do
 
   def start_manager!
     m.go!
+
     m.exit_code.should == 0
+    m.workers.each do | w |
+      if w.exit_code
+        w.file_exists?(:exited).should == true
+        w.file_exists?(:exit_code).should == true
+      end
+    end
+
     unless @dont_check_exit_codes
       m.workers.each do | w |
         w.exit_code.should == 0

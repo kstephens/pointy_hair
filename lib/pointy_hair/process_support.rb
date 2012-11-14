@@ -53,11 +53,11 @@ module PointyHair
 
     def at_end_process!
       self.exit_code ||= 0
-      set_status! :exited
-      write_file! :exited do | fh |
+      write_file! :exit_code do | fh |
         fh.set_encoding("UTF-8")
         fh.puts exit_code
       end
+      write_status_file! :exited
       self.exited = true
       _exit! exit_code
     end
