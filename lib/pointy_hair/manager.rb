@@ -294,5 +294,31 @@ module PointyHair
       @class_cache[name] = cls
     end
 
+    def get_child_pids pid = nil
+      pid ||= self.pid
+      lines = `ps -x -o pid,ppid,uid,gid,ruid,rgid,pcpu,pmem,tty,command`.split("\n").map{|l| l.strip.split(/\s+/)}
+      header = lines.shift.map{|k| k.downcase.to_sym}
+      out = [ ]
+      lines.each do | f |
+        h = { }
+        header.each_with_index do | k, i |
+          v = f[i]
+          case k
+          when :'%cpu', :'%mem'
+            v = v.to_f
+          when :pid, :ppid, :uid, :gid, :ruid, :rgid
+            v = v.to_i
+          end
+          h[k] = v
+        end
+        if h[:ppid] == pid and worker = workers.find{|w| w.pid == h[:pid] }
+          h[:worker] = worker
+          out << h
+        end
+        h
+      end
+      out
+    end
+
   end
 end
