@@ -19,6 +19,7 @@ describe PointyHair::Worker do
   end
 
   it "should initialize correctly" do
+    w.exited.should == nil
     w.pid.should == Process.pid
     w.ppid.should == Process.ppid
     w.process_count.should == 0
@@ -97,6 +98,7 @@ describe PointyHair::Worker do
 
     start_process!
 
+    w.exited.should == true
     w.exit_code.should == 0
     self.exit_code.should == 0
     w.state[:exit_code].should == 0
@@ -173,7 +175,9 @@ describe PointyHair::Worker do
   end
 
   def start_process!
+    w.exited.should == nil
     w.before_start_process!
+    w.exited.should == false
     w.start_process!
 
     w.pid.should == $$
