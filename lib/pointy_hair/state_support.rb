@@ -9,6 +9,7 @@ module PointyHair
       super
       target.extend(ModuleMethods)
     end
+
     module ModuleMethods
       def state_accessor *names
         module_eval(names.map do | n |
@@ -23,10 +24,13 @@ END
     end
 
     def clear_state!
+      now = Time.now
       @state = {
         :hostname => Socket.gethostname.force_encoding("UTF-8"),
+        :status => :created,
+        :status_time => now,
+        :created_at => now.dup,
       }
-      set_status! :created
     end
 
     def save_work! work

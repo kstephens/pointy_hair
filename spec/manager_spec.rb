@@ -30,6 +30,9 @@ describe PointyHair::Manager do
         }
       }
     }
+    def m._exit! exit_code
+      log { "_exit! #{exit_code}" }
+    end
     def m.get_work!
       log "get_work! #{work_id}"
       if work_id >= 10
@@ -69,9 +72,6 @@ describe PointyHair::Manager do
     m.options[:redirect_stdio] = false
     m.options[:setup_signal_handlers] = false
     m.logger = false
-    def m._exit! exit_code
-      log { "_exit! #{exit_code}" }
-    end
   end
 
   after(:each) do
@@ -129,6 +129,7 @@ describe PointyHair::Manager do
       end
       super
     end
+
     @dont_check_exit_codes = true
     start_manager!
 
@@ -140,7 +141,7 @@ describe PointyHair::Manager do
   end
 
   it 'should restart workers after max_age' do
-    m.logger = $stdout
+    # m.logger = $stdout
     m.worker_config[:kind_1][:max_age] = 3
     def m.get_work!
       log "get_work! #{work_id}"
@@ -189,6 +190,7 @@ describe PointyHair::Manager do
       super
     end
 
+    @dont_check_exit_codes = true # FIXME
     start_manager!
 
     w0 = m.find_worker(:kind_1, 0)

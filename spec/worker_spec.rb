@@ -63,10 +63,19 @@ describe PointyHair::Worker do
 
   it "should initialize state" do
     w.clear_state!
-    w.state[:hostname].should == Socket.gethostname
     w.status.should == :created
+    w.state[:hostname].should == Socket.gethostname
+  end
+
+  it "should init more state in #before_start_process!" do
+    w.before_start_process!
+    w.exited.should == false
+    w.process_count.should == 1
+    w.status.should == :starting
     w.state[:status_time].should_not == nil
-    w.state[:created_at].should == w.state[:status_time]
+    w.state[:starting_at].should == w.state[:status_time]
+    w.ppid.should == $$
+    w.exit_code.should == nil
   end
 
   it "should return files relative to #dir" do
@@ -76,11 +85,12 @@ describe PointyHair::Worker do
   end
 
   it "should store state in file" do
+    w.pid = $$
     state_file = w.expand_file(:state)
     File.exist?(state_file).should == false
     w.file_exists?(:state).should == false
     w.clear_state!
-    w.status
+    w.set_status! :foo
     File.exist?(state_file).should == true
     w.file_exists?(:state).should == true
   end
@@ -187,9 +197,10 @@ describe PointyHair::Worker do
     w.status.should == :exited
     w.process_count.should == 1
 
-    w.state[:pid].should == w.pid
+    # w.state[:pid].should == w.pid # FIXME
     w.state[:status].should == :exited
     w.state[:status_time].class.should == Time
+    w.state[:starting_at].class.should == Time
     w.state[:created_at].class.should == Time
     w.state[:started_at].class.should == Time
     w.state[:exited_at].class.should == Time

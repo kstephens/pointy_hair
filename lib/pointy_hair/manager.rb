@@ -206,19 +206,20 @@ module PointyHair
     end
 
     def spawn_worker! worker
-      now = Time.now
+      now = @status_now = Time.now
       # log { "spawning worker #{worker}" }'
-      worker.stopping = worker.exited = false
       worker.before_start_process!
-      worker.status = :starting
-      worker.state[:starting_at] = now
-      worker.ppid = $$
+      worker_starting! worker
       worker.pid = Process.fork do
         worker.start_process!
       end
       worker.pid_running = now
       log { "spawned worker #{worker}" }
       worker_spawned! worker
+    end
+
+    # Callback
+    def worker_starting! worker
     end
 
     # Callback

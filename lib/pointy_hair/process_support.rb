@@ -4,10 +4,18 @@ module PointyHair
   module ProcessSupport
     # Called by Manager, before spawning.
     def before_start_process!
+      now = @status_now || Time.now
       self.options ||= { }
       self.exited = false
       @process_count += 1
       clear_state!
+      self.stopping = self.exited = false
+      self.status = :starting
+      self.state[:status_time] = now
+      self.state[:starting_at] = now
+      self.ppid = $$
+      self.exit_code = nil
+      @status_now = nil
     end
 
     def start_process!
@@ -24,7 +32,6 @@ module PointyHair
       self.pid = $$
       self.pid_running = @status_now
       self.ppid = Process.ppid
-      self.exit_code = nil
       self.work_id = 0
       set_status! :started
       setup_process!
