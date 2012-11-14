@@ -14,6 +14,7 @@ module PointyHair
     attr_accessor :process_count, :keep_files, :pause_interval
     attr_accessor :work, :work_error
     attr_accessor :work_history
+    attr_accessor :exited
 
     def state     ; @state; end
     def status    ; state[:status]     ; end
@@ -116,6 +117,7 @@ module PointyHair
         fh.set_encoding("UTF-8")
         fh.puts exit_code
       end
+      self.exited = true
       _exit! exit_code
     end
 

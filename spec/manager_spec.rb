@@ -30,10 +30,12 @@ describe PointyHair::Manager do
       }
     }
     def mgr.get_work!
-      $stderr.puts "working #{@work_id}"
-      if @work_id > 5
+      if @work_id >= 5
+        $stderr.puts "stop! at #{@work_id}"
         stop!
+        return nil
       else
+        $stderr.puts "working #{@work_id}"
         pp get_child_pids
       end
       super

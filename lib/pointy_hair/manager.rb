@@ -5,12 +5,13 @@ require 'thread'
 
 module PointyHair
   class Manager < Worker
-    attr_accessor :worker_config, :poll_interval, :keep_files, :verbose
+    attr_accessor :worker_config, :poll_interval, :verbose
 
     def initialize
       super
       @base_dir = '/tmp/pointy-hair'
       @workers = [ ]
+      @workers_running = [ ]
       @kind = "manager"
       @instance = 0
       @poll_interval = 5
@@ -22,6 +23,7 @@ module PointyHair
     end
 
     def workers; @workers; end
+    def workers_running; @workers_running; end
 
     def setup_process!
       current_symlink!
@@ -49,6 +51,14 @@ module PointyHair
 
     def after_run!
       stop_workers!
+      stop_checking_at = Time.now + 5 # TODO max average run_loop time.
+      until Time.now >= stop_checking_at or workers_running.empty?
+        check_workers!
+        sleep 1
+      end
+      unless workers_running.empty?
+        kill_workers!
+      end
       stop_reaper!
       check_workers!
       get_workers_state!
@@ -83,21 +93,25 @@ module PointyHair
       @reap_pids = Queue.new
       @reaper_thread = Thread.new do
         loop do
-          case pid = @reap_pids.deq
+          case cmd = @reap_pids.deq
           when :stop
             break
           else
-            Process.waitpid(pid) rescue nil
-            log { "reaped #{pid}" }
+            pid, worker = cmd
+            if (Process.waitpid(pid) rescue nil)
+              log { "reaped #{pid} #{worker}" }
+            end
           end
         end
       end
     end
 
     def stop_reaper!
+      log { "stop_reaper!" }
       @reap_pids.enq(:stop)
       @reaper_thread.join(60)
       @reaper_thread = nil
+      log { "stop_reeaper! finished" }
     end
 
     def make_workers!
@@ -165,27 +179,28 @@ module PointyHair
     end
 
     def check_workers!
+      running = [ ]
       workers.each do | worker |
         # log { "checking worker #{worker}" }
         worker.get_state!
         now = Time.now
         case
-        when worker_exited?(worker)
+        when worker_exited?(worker)            # clean
           worker_exited! worker
-        when ! process_exists?(worker.pid)
+        when ! process_exists?(worker.pid)     # process disappeared
           worker_set_status! worker, :died, now
           worker_exited! worker
-        when worker_stuck?(worker)
-          worker_set_status! worker, :stuck, now
-          # TODO: put work back in!
-          worker_exited! worker
-        else
+        when worker_stuck?(worker)             # process stuck
+          worker_stuck! worker
+        else                                   # process running
+          running << worker
           worker.pid_running = now
         end
         worker.checked_at = now
         worker.write_file! :checked, now
         # pp worker
       end
+      @workers_running = running
     end
 
     def worker_set_status! worker, state, now, data = nil
@@ -196,14 +211,22 @@ module PointyHair
     end
 
     def worker_exited! worker
-      # log { "queue reap pid #{worker.pid}" }
-      @reap_pids.enq(worker.pid)
-      worker.exited!
-      worker.pid_running = nil
+      unless worker.exited
+        log { "worker exited #{worker.pid}" }
+        worker.exited = true
+        # if it disappeared, there is no process to reap.
+        unless worker.status == :died
+          @reap_pids.enq([worker.pid, worker])
+        end
+        worker.pid_running = nil
+      end
     end
 
     def worker_exited? worker
-      worker.file_exists? :exited or ! worker.pid_running
+      worker.exited or
+        worker.status == :exited or
+        ! worker.pid_running or
+        worker.file_exists? :exited
     end
 
     def pause_worker! worker
@@ -216,14 +239,22 @@ module PointyHair
 
     def stop_workers!
       workers.each do | worker |
-        worker.stop!
-        worker_exited! worker
+        stop_worker! worker
       end
     end
 
     def stop_worker! worker
-      worker.stop!
-      # Process.kill('TERM', worker.pid)
+      unless worker.exited
+        worker.stop!
+        # Process.kill('TERM', worker.pid)
+      end
+    end
+
+    def kill_workers!
+      log { "kill_workers!" }
+      workers.each do | worker |
+        Process.kill(9, worker.pid) rescue nil
+      end
     end
 
     def process_exists? pid
@@ -236,6 +267,13 @@ module PointyHair
 
     def worker_stuck? worker
       false
+    end
+
+    def worker_stuck! worker
+      # KILL -9 worker.
+      worker_set_status! worker, :stuck, now
+      # TODO: put work back in!
+      worker_exited! worker
     end
 
     def get_workers_state!
