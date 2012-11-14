@@ -176,7 +176,7 @@ module PointyHair
     def work_error! err
     end
 
-    def kill! signal = 'INT'
+    def kill! signal = 'TERM'
       if pid_running
         Process.kill(signal, pid)
       end
@@ -185,6 +185,7 @@ module PointyHair
     def log msg = nil
       if @logger
         msg ||= yield if block_given?
+        @logger.seek(0, IO::SEEK_END) if @logger.respond_to?(:seek)
         @logger.puts "#{Time.now.iso8601(4)} #{self} #{$$} #{msg}"
       end
     end

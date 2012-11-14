@@ -200,8 +200,8 @@ describe PointyHair::Worker do
     # w.state[:pid].should == w.pid # FIXME
     w.state[:status].should == :exited
     w.state[:status_time].class.should == Time
-    w.state[:starting_at].class.should == Time
     w.state[:created_at].class.should == Time
+    w.state[:starting_at].class.should == Time
     w.state[:started_at].class.should == Time
     w.state[:exited_at].class.should == Time
 
