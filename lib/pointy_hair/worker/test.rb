@@ -5,7 +5,10 @@ module PointyHair
       def initialize
         super
         @counter = 0
+        @data = { }
       end
+      def [] k;     @data[k];     end
+      def []= k, v; @data[k] = v; end
 
       def get_work!
         sleep(0.25 + rand * 0.25)
@@ -18,7 +21,7 @@ module PointyHair
 
       def work! work
         sleep(0.25 + rand * 0.25)
-        $_stdout.puts "#{Time.now.iso8601(4)} #{self} => #{work}"
+        puts "  ### #{Time.now.iso8601(4)} #{self.to_s_short} => #{work}"
         write_file! "output" do | fh |
           fh.puts work.to_s
         end

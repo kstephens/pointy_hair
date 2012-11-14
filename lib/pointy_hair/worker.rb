@@ -8,8 +8,8 @@ require 'pointy_hair/file_support'
 module PointyHair
   class Worker
     include FileSupport
-    attr_accessor :kind, :options, :instance, :base_dir
-    attr_accessor :paused, :work_id, :max_work_id
+    attr_accessor :kind, :options, :instance, :base_dir, :logger
+    attr_accessor :max_work_id
     attr_accessor :pid, :pid_running, :ppid
     attr_accessor :process_count, :keep_files, :pause_interval
     attr_accessor :work, :work_error
@@ -17,27 +17,51 @@ module PointyHair
     attr_accessor :exited
 
     def state     ; @state; end
-    def status    ; state[:status]     ; end
-    def status= x ; state[:status] = x ; end
     def checked_at   ; @checked_at ; end
     def checked_at= x; state[:checked_at] = @checked_at = x ; end
-    def exit_code    ; state[:exit_code]     ; end
-    def exit_code= x ; state[:exit_code] = x ; end
+
+    eval(
+    [ :status, :work_id, :exit_code, :running, :stopping, :stopped, :pause, :paused, :resume, :resumed ].map do | n |
+      <<"END"
+        def #{n}    ; state[#{n.inspect}]              ; end
+        def #{n}= x ; @_#{n} = state[#{n.inspect}] = x ; end
+        def _#{n}   ; @_#{n}                           ; end
+END
+    end * "\n")
 
     def to_s
       "\#<#{self.class} #{kind} #{instance} #{pid} #{status} #{work_id} >"
     end
 
+    def to_s_short
+      "#{kind}:#{instance}:#{pid}"
+    end
+
+
+    # SUBCLASS RESPONSIBLILTY
+    def get_work!
+      raise "subclass responsibility"
+    end
+
+    def put_work_back! work
+      raise "subclass responsibility"
+    end
+
+    def work! work
+      raise "subclass responsibility"
+    end
+
+
     def initialize opts = nil
+      @options = { }
+      @state = { }
       @procline_prefix = "pointy_hair "
-      @running = nil
       @pid = $$
       @ppid = Process.ppid
       @pid_running = nil
       @process_count = 0
-      @state = { }
       @work_history = [ ]
-      @work_id = 0
+      self.work_id = 0
       @pause_interval = 5
       if opts
         opts.each do | k, v|
@@ -62,7 +86,7 @@ module PointyHair
 
     def clear_state!
       @state = {
-        :hostname => Socket.gethostname.force_encoding("UTF-8")
+        :hostname => Socket.gethostname.force_encoding("UTF-8"),
       }
       set_status! :created
     end
@@ -71,9 +95,10 @@ module PointyHair
       @dir ||= "#{@base_dir}/#{@kind}/#{@instance}/#{@pid || '_'}".freeze
     end
 
-    # Called by manaager, before spawning.
+    # Called by Manager, before spawning.
     def before_start_process!
-      @exited = false
+      self.options ||= { }
+      self.exited = false
       @process_count += 1
     end
 
@@ -88,11 +113,12 @@ module PointyHair
 
     def at_start_process!
       @status_now = Time.now
-      self.exit_code = nil
       self.pid = $$
       self.pid_running = @status_now
       self.ppid = Process.ppid
       clear_state!
+      self.exit_code = nil
+      self.work_id = 0
       set_status! :started
       setup_process!
       self
@@ -104,7 +130,7 @@ module PointyHair
       set_status! :exit_error, :error => e
       write_file! :exit_error do | fh |
         fh.set_encoding("UTF-8")
-        e[:work_id] = @work_id
+        e[:work_id] = work_id
         e[:time] = state[:status_time]
         write_yaml(fh, e)
       end
@@ -127,7 +153,7 @@ module PointyHair
     end
 
     def cleanup_files!
-      unless @keep_files || file_exists?(:keep)
+      unless keep_files || file_exists?(:keep)
         log { "cleanup_files!" }
         remove_files!
         true
@@ -154,10 +180,12 @@ module PointyHair
     def after_run!
     end
 
+    # ProcessSupport
     def setup_process!
       current_symlink!
-      redirect_stdio!
-      setup_signal_handlers!
+      redirect_stdio! unless @options[:redirect_stdio] == false
+      setup_signal_handlers! unless @options[:setup_signal_handlers] == false
+      @logger ||= $stderr unless @logger == false
     end
 
     def redirect_stdio!
@@ -199,68 +227,109 @@ module PointyHair
       self
     end
 
+    # RunLoop
+
+    def running?
+      running
+    end
+
     def run_loop
       set_status! :run_loop_begin
-      @running = true
-      while running?
+      self.running = true
+      while running? and not stopping
         @loop_t0 = Time.now
         check_stop!
-        check_paused!
-        unless handle_paused
+        break if stopping
+        check_pause!
+        unless handle_pausing
           set_status! :run_loop
           get_and_do_work!
         end
         check_max_work_id!
         check_ppid!
       end
+      at_stopped!
+      self.running = false
       write_status_file! :finished
     ensure
       set_status! :run_loop_end
     end
 
-    def check_stopping!
-      if @stopping
-        @stopping = @stopped = @status_now = Time.now
-        # remove_file! :stop
-        write_status_file! :stopped
-        stopped!
-      end
+    #############################################
+    #  Pausing support
+
+    def pause!
+      log { "pause!" }
+      self.pause = now = Time.now
+      remove_file! :resume
+      write_file! :pause, now
     end
 
-    def check_ppid!
-      if ppid != (current_ppid = Process.ppid)
-        write_status_file! :parent_changed
-        stop!
-      end
+    def resume!
+      log { "resume!" }
+      self.resume = now = Time.now
+      remove_file! :pause
+      write_file! :resume, now
     end
 
-    def handle_paused
-      if @paused
-        remove_file! :pause
-        remove_file! :resumed
-        write_status_file! :paused
-        paused!
+    def check_pause!
+      self.pause = file_exists?(:pause)
+    end
+
+    # Called from Manager.
+    def wait_until_paused!
+      until paused
+        get_state!
+        sleep 0.25
+      end
+      self
+    end
+
+    def wait_until_resumed!
+      while paused
+        get_state!
+        sleep 0.25
+      end
+      self
+    end
+
+    def handle_pausing
+      if pause
+        at_pause!
         loop do
-          sleep(@pause_interval + rand)
-          check_paused!
+          sleep(pause_interval + rand)
+          while_paused!
+          check_pause!
           check_stop!
+          break if stopping
           check_ppid!
-          break if ! @paused || @stopping
+          if ! pause
+            at_resume!
+            break
+          end
           set_status! :paused
         end
-        remove_file! :resume
-        remove_file! :paused
-        write_status_file! :resumed
-        resumed!
         true
       end
     end
 
-    def check_max_work_id!
-      if @max_work_id && @max_work_id > 0 && @max_work_id < @work_id
-        @running = false
-        set_status! :max_work_id_reached
-      end
+    def at_pause!
+      remove_file! :resumed
+      self.resumed = nil
+      self.paused = @status_now = Time.now
+      write_status_file! :paused
+      log { "paused!" }
+      paused!
+    end
+
+    def at_resume!
+      remove_file! :resume
+      remove_file! :paused
+      self.paused = nil
+      self.resumed = @status_now = Time.now
+      write_status_file! :resumed
+      log { "resumed!" }
+      resumed!
     end
 
     # callback
@@ -268,47 +337,85 @@ module PointyHair
     end
 
     # callback
+    def while_paused!
+    end
+
+    # callback
     def resumed!
+    end
+
+
+    # Stop support.
+    def stop! opts = nil
+      unless stopping or stopped
+        now = @status_now = Time.now
+        self.running = false
+        self.stopping = now
+        unless file_exists? :stop
+          write_file! :stop, now
+        end
+        @status_now = nil
+        if opts and opts[:force] and $$ == pid
+          raise Error::Stop
+        end
+      end
+    end
+
+    def check_stop!
+      unless self.stopping
+        if file_exists?(:stop)
+          self.stopping = Time.now # Time.parse(file_read!(:stop))
+          write_status_file! :stopping
+          log { "stopping!" }
+          stopping!
+        end
+      end
+      self
+    end
+
+    def at_stopped!
+      unless self.stopped
+        if self.stopping
+          self.stopped = @status_now = Time.now
+          # remove_file! :stop
+          write_status_file! :stopped
+          log { "stopped!" }
+          stopped!
+        end
+      end
+      self
+    end
+
+    # callback
+    def stopping!
     end
 
     # callback
     def stopped!
     end
 
-    def running?
-      @running
-    end
-
-    def stop! opts = nil
-      unless @stopped or @stopping
-        opts ||= { }
-        @running = false
-        now = @status_now = Time.now
-        @stopping = now
-        unless file_exists? :stop
-          write_file! :stop, now
-        end
-        unless file_exists? :stopping
-          write_file! :stopping, now
-        end
-        state[:stopping_at] ||= now
-        @status_now = nil
-        if opts[:force]
-          raise Error::Stop
-        end
+    def check_ppid!
+      if ppid != (current_ppid = Process.ppid)
+        write_status_file! :parent_changed
+        parent_changed!
+        stop!
       end
     end
 
-    def pause!
-      @paused = true
-      remove_file! :resume
-      write_file! :pause, Time.now
+    # callback
+    def parent_changed!
     end
 
-    def resume!
-      @paused = false
-      remove_file! :pause
-      write_file! :resume, Time.now
+    def check_max_work_id!
+      if @max_work_id && @max_work_id > 0 && @max_work_id < work_id
+        self.running = false
+        set_status! :max_work_id_reached
+        max_work_id!
+      end
+    end
+
+    # callback
+    def max_work_id!
     end
 
     def get_and_do_work!
@@ -317,7 +424,7 @@ module PointyHair
       @wait_t0 = @wait_t1 = Time.now
       if @work = get_work!
         @wait_t1 = Time.now
-        state[:work_id] = @work_id += 1
+        self.work_id += 1
         set_status! :working
         save_work! work
         rename_file! :work_error, :last_work_error
@@ -338,6 +445,17 @@ module PointyHair
         end
       end
       self
+    end
+
+    def save_work! work
+      write_file! :work do | fh |
+        write_yaml(fh, work)
+      end
+      self
+    end
+
+    def save_last_work!
+      rename_file! :work, :completed_work
     end
 
     # callback
@@ -422,18 +540,6 @@ module PointyHair
       t1 and t0 and t1 > t0 and t1 - t0
     end
 
-    def get_work!
-      raise "subclass responsibility"
-    end
-
-    def put_work_back! work
-      raise "subclass responsibility"
-    end
-
-    def work! work
-      raise "subclass responsibility"
-    end
-
     def set_status! status = nil, data = nil
       state.update(data) if data
       if status or data
@@ -444,9 +550,6 @@ module PointyHair
         state[:status] = status
         state[:status_time] = now
         state[:"#{status}_at"] = now.dup
-        state[:paused] = @paused
-        state[:stopping] = @stopping
-        state[:stopped] = @stopped
         write_file! :status, state[:status].to_s
         procline!
       end
@@ -479,44 +582,16 @@ module PointyHair
     def get_state!
       read_file! :state do | fh |
         fh.set_encoding("UTF-8")
-        if @state = YAML.load(fh.read)
-          @work_id = state[:work_id]
-          @paused  = state[:paused]
-          @stopping = state[:stopping]
-          @stopped = state[:stopped]
-        else
-          @state = { }
-        end
-      end
-      self
-    end
-
-    def save_work! work
-      write_file! :work do | fh |
-        write_yaml(fh, work)
-      end
-      self
-    end
-
-    def save_last_work!
-      rename_file! :work, :completed_work
-    end
-
-    def check_paused!
-      @paused = file_exists?(:paused)
-    end
-
-    def check_stop!
-      if file_exists?(:stop)
-        @stopping = Time.now # Time.parse(file_read!(:stop))
-        stop!
+        @state = YAML.load(fh.read) || { }
       end
       self
     end
 
     def log msg = nil
-      msg ||= yield if block_given?
-      $stderr.puts "#{Time.now.iso8601(4)} #{self} #{$$} #{msg}"
+      if @logger
+        msg ||= yield if block_given?
+        @logger.puts "#{Time.now.iso8601(4)} #{self} #{$$} #{msg}"
+      end
     end
 
     def procline!

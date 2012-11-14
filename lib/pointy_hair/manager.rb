@@ -7,7 +7,7 @@ module PointyHair
   class Manager < Worker
     attr_accessor :worker_config, :poll_interval, :verbose
 
-    def initialize
+    def initialize opts = nil
       super
       @base_dir = '/tmp/pointy-hair'
       @workers = [ ]
@@ -25,9 +25,9 @@ module PointyHair
     def workers; @workers; end
     def workers_running; @workers_running; end
 
-    def setup_process!
-      current_symlink!
-      setup_signal_handlers!
+    def go!
+      before_start_process!
+      start_process!
     end
 
     def before_run!
@@ -130,15 +130,23 @@ module PointyHair
       new_workers = [ ]
       worker_config.each do | kind, cfg |
         next unless cfg[:enabled]
-        cls = get_class(cfg[:class])
+        cls ||= nil
         (cfg[:instances] || 1).times do | i |
-          unless worker = workers.find { | w | w.kind == kind && w.class == cls && w.instance == i }
-            worker = cls.new
+          unless worker = find_worker(kind, i)
+            if wo = cfg[:worker_objects]
+              unless worker = wo[i]
+                raise ArgumentError, "kind #{kind}, instance #{i}: no worker_object available"
+              end
+            end
+            unless worker
+              cls ||= cfg_class(cfg)
+              worker = cls.new
+            end
+            worker.kind = kind
+            worker.instance = i
             worker.pid = nil
             worker.pid_running = nil
             worker.base_dir = "#{dir}/worker"
-            worker.kind = kind
-            worker.instance = i
             new_workers << worker
             log { "created worker #{worker}" }
           end
@@ -149,14 +157,17 @@ module PointyHair
       workers.concat(new_workers)
     end
 
+    def find_worker kind, instance
+      workers.find { | w | w.kind == kind && w.instance == instance }
+    end
+
     def prune_workers!
       # log "prune_workers!"
       remove_workers = [ ]
       worker_config.each do | kind, cfg |
-        cls = get_class(cfg[:class])
         instances = cfg[:instances] || 1
         instances = 0 unless cfg[:enabled]
-        unneeded = workers.select { | o | o.kind == kind && o.class == cls && o.instance >= instances }
+        unneeded = workers.select { | o | o.kind == kind && o.instance >= instances }
         unneeded.each do | worker |
           log { "pruning worker #{worker}" }
           stop_worker! worker
@@ -166,6 +177,10 @@ module PointyHair
       remove_workers.each do | w |
         workers.delete(w)
       end
+    end
+
+    def cfg_class cfg
+      cls = get_class(cfg[:class] || (wo = cfg[:worker_objects] and wo = wo[0] and wo.class))
     end
 
     def spawn_workers!
@@ -198,6 +213,7 @@ module PointyHair
         when worker_exited?(worker)            # clean
           worker_exited! worker
         when ! process_exists?(worker.pid)     # process disappeared
+          worker.exit_code ||= -1
           worker_set_status! worker, :died, now
           worker_exited! worker
         when worker_stuck?(worker)             # process stuck
@@ -222,7 +238,7 @@ module PointyHair
 
     def worker_exited! worker
       unless worker.exited
-        log { "worker exited #{worker.pid}" }
+        log { "worker exited #{worker.pid} #{worker.exit_code}" }
         worker.exited = true
         # if it disappeared, there is no process to reap.
         unless worker.status == :died
@@ -330,6 +346,7 @@ module PointyHair
     end
 
     def get_class name
+      raise ArgumentError if name.nil?
       return name if Class === name
       @class_cache ||= { }
       name = name.to_s
