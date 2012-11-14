@@ -64,7 +64,17 @@ module PointyHair
       get_workers_state!
       write_workers_status!
       show_workers! if @verbose
-      exited!
+      cleanup_files!
+    end
+
+    def cleanup_files!
+      keep = false
+      workers.each do | worker |
+        r = worker.cleanup_files!
+        keep ||= ! r
+      end
+      @keep_files ||= keep
+      super
     end
 
     def paused!

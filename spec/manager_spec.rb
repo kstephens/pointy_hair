@@ -10,6 +10,7 @@ describe PointyHair::Manager do
     self.base_dir = File.expand_path("../../tmp/spec/#{$$}", __FILE__)
     self.m = PointyHair::Manager.new
     m.base_dir = base_dir
+    m.keep_files = 2
   end
 
   after(:each) do

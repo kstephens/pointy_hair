@@ -125,9 +125,13 @@ module PointyHair
       Process.exit! code
     end
 
-    def exited!
+    def cleanup_files!
       unless @keep_files || file_exists?(:keep)
+        log { "cleanup_files! @keep_files=#{@keep_files.inspect}" }
         remove_files!
+        true
+      else
+        false
       end
     end
 
