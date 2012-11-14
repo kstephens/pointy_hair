@@ -2,12 +2,14 @@
 require 'pointy_hair'
 
 require 'pointy_hair/worker/test'
+require 'fileutils'
 
 describe PointyHair::Manager do
   attr_accessor :m, :base_dir, :exit_code
 
   before(:each) do
-    self.base_dir = File.expand_path("../../tmp/spec/#{$$}", __FILE__)
+    self.base_dir = File.expand_path("../../tmp/spec/#{File.basename(__FILE__)}/#{$$}", __FILE__)
+    puts "base_dir = #{self.base_dir}"
     self.m = PointyHair::Manager.new
     m.base_dir = base_dir
     m.keep_files = 2
