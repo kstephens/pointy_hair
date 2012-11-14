@@ -123,6 +123,8 @@ describe PointyHair::Manager do
         worker_config[:kind_1][:instances] -= 1
       when work_id == 17
         find_worker(:kind_1, 0).kill!(9)
+      when work_id == 20
+        find_worker(:kind_1, 1).stop!
       when work_id >= 25
         log "stop!"
         stop!
@@ -133,10 +135,10 @@ describe PointyHair::Manager do
     @dont_check_exit_codes = true
     start_manager!
 
-    m.instance_variable_get("@_n_spawned").should == 4
+    m.instance_variable_get("@_n_spawned").should == 5
     m.instance_variable_get("@_n_pruned").should == 1
     m.instance_variable_get("@_n_died").should >= 1
-    m.instance_variable_get("@_n_exited").should == 4
+    m.instance_variable_get("@_n_exited").should == 5
     m.workers.size.should == 2
   end
 
