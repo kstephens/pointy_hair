@@ -60,7 +60,9 @@ module PointyHair
     end
 
     def clear_state!
-      @state = { :hostname => Socket.gethostname.force_encoding("UTF-8") }
+      @state = {
+        :hostname => Socket.gethostname.force_encoding("UTF-8")
+      }
       set_status! :created
     end
 
