@@ -87,10 +87,10 @@ module PointyHair
     end
 
     def at_start_process!
-      @now = Time.now
+      @status_now = Time.now
       self.exit_code = nil
       self.pid = $$
-      self.pid_running = @now
+      self.pid_running = @status_now
       self.ppid = Process.ppid
       clear_state!
       set_status! :started
@@ -128,7 +128,7 @@ module PointyHair
 
     def cleanup_files!
       unless @keep_files || file_exists?(:keep)
-        log { "cleanup_files! @keep_files=#{@keep_files.inspect}" }
+        log { "cleanup_files!" }
         remove_files!
         true
       else
@@ -213,13 +213,18 @@ module PointyHair
         check_max_work_id!
         check_ppid!
       end
-      if @stopped
-        write_status_file! :stopped
-        stopped!
-      end
       write_status_file! :finished
     ensure
       set_status! :run_loop_end
+    end
+
+    def check_stopping!
+      if @stopping
+        @stopping = @stopped = @status_now = Time.now
+        # remove_file! :stop
+        write_status_file! :stopped
+        stopped!
+      end
     end
 
     def check_ppid!
