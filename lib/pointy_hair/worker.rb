@@ -73,6 +73,7 @@ module PointyHair
 
     # Called by manaager, before spawning.
     def before_start_process!
+      @exited = false
       @process_count += 1
     end
 
