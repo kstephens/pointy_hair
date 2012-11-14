@@ -398,7 +398,7 @@ module PointyHair
     def make_error_hash err
       e = {
         :class_name => err.class.name.force_encoding('UTF-8'),
-        :message    => err.message.force_encoding('UTF-8'),
+        :message    => err.message.dup.force_encoding('UTF-8'),
         :backtrace  => err.backtrace.map{|x| x.force_encoding('UTF-8') },
       }
       e
