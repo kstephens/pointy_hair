@@ -85,6 +85,44 @@ describe PointyHair::Manager do
     worker_objects[2].work_id.should == 0
   end
 
+  it 'should spawn and prune workers' do
+    def m.worker_spawned! worker
+      @_n_spawned ||= 0
+      @_n_spawned += 1
+      super
+    end
+    def m.worker_pruned! worker
+      @_n_pruned ||= 0
+      @_n_pruned += 1
+      super
+    end
+    def m.worker_exited! worker
+      @_n_exited ||= 0
+      @_n_exited += 1
+      super
+    end
+    def m.get_work!
+      log "get_work! #{work_id}"
+      case
+      when work_id == 5
+        worker_config[:kind_1][:instances] += 1
+      when work_id == 15
+        worker_config[:kind_1][:instances] -= 1
+      when work_id >= 20
+        log "stop!"
+        stop!
+      end
+      super
+    end
+
+    start_manager!
+
+    m.instance_variable_get("@_n_spawned").should == 3
+    m.instance_variable_get("@_n_pruned").should == 1
+    m.instance_variable_get("@_n_exited").should == 3
+    m.workers.size.should == 2
+  end
+
   it 'should pause workers' do
     def m.get_work!
       log "get_work! #{work_id}"
