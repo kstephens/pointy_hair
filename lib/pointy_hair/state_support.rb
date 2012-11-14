@@ -5,6 +5,22 @@ require 'yaml'
 
 module PointyHair
   module StateSupport
+    def self.included target
+      super
+      target.extend(ModuleMethods)
+    end
+    module ModuleMethods
+      def state_accessor *names
+        module_eval(names.map do | n |
+      <<"END"
+        def #{n}    ; state[#{n.inspect}]              ; end
+        def #{n}= x ; @_#{n} = state[#{n.inspect}] = x ; end
+        def _#{n}   ; @_#{n}                           ; end
+END
+        end * "\n")
+      end
+    end
+
     def clear_state!
       @state = {
         :hostname => Socket.gethostname.force_encoding("UTF-8"),

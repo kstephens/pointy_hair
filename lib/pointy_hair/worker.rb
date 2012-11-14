@@ -20,14 +20,7 @@ module PointyHair
     def checked_at   ; @checked_at ; end
     def checked_at= x; state[:checked_at] = @checked_at = x ; end
 
-    eval(
-    [ :status, :work_id, :exit_code, :running, :stopping, :stopped, :pause, :paused, :resume, :resumed ].map do | n |
-      <<"END"
-        def #{n}    ; state[#{n.inspect}]              ; end
-        def #{n}= x ; @_#{n} = state[#{n.inspect}] = x ; end
-        def _#{n}   ; @_#{n}                           ; end
-END
-    end * "\n")
+    state_accessor :status, :work_id, :exit_code, :running, :stopping, :stopped, :pause, :paused, :resume, :resumed
 
     def to_s
       "\#<#{self.class} #{kind} #{instance} #{pid} #{status} #{work_id} >"
