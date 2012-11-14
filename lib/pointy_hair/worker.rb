@@ -231,17 +231,21 @@ module PointyHair
 
     def handle_paused
       if @paused
-        set_status! :paused
+        remove_file! :pause
+        remove_file! :resumed
+        write_status_file! :paused
         paused!
         loop do
           sleep(@pause_interval + rand)
           check_paused!
           check_stop!
           check_ppid!
-          break unless @paused || @stop
+          break if ! @paused || @stopping
           set_status! :paused
         end
-        set_status! :resumed
+        remove_file! :resume
+        remove_file! :paused
+        write_status_file! :resumed
         resumed!
         true
       end
@@ -271,30 +275,35 @@ module PointyHair
     end
 
     def stop! opts = nil
-      opts ||= { }
-      @running = false
-      @stopped = true
-      if opts[:force]
-        raise Error::Stop
+      unless @stopped or @stopping
+        opts ||= { }
+        @running = false
+        now = @status_now = Time.now
+        @stopping = now
+        unless file_exists? :stop
+          write_file! :stop, now
+        end
+        unless file_exists? :stopping
+          write_file! :stopping, now
+        end
+        state[:stopping_at] ||= now
+        @status_now = nil
+        if opts[:force]
+          raise Error::Stop
+        end
       end
-      now = Time.now
-      unless file_exists? :stop
-        write_file! :stop, now
-      end
-      unless file_exists? :stopping
-        write_file! :stopping, now
-      end
-      state[:stopping_at] ||= now
     end
 
     def pause!
       @paused = true
-      write_file! :paused, Time.now
+      remove_file! :resume
+      write_file! :pause, Time.now
     end
 
     def resume!
       @paused = false
-      remove_file! :paused
+      remove_file! :pause
+      write_file! :resume, Time.now
     end
 
     def get_and_do_work!
