@@ -334,7 +334,8 @@ module PointyHair
 
     def get_child_pids pid = nil
       pid ||= self.pid
-      lines = `ps -x -o pid,ppid,uid,gid,ruid,rgid,pcpu,pmem,tty,command`.split("\n").map{|l| l.strip.split(/\s+/)}
+      # -x OS X
+      lines = `ps -x -o pid,ppid,pgid,uid,gid,ruid,rgid,pcpu,pmem,tty,xstat,command`.split("\n").map{|l| l.strip.split(/\s+/)}
       header = lines.shift.map{|k| k.downcase.to_sym}
       out = [ ]
       lines.each do | f |
@@ -344,7 +345,7 @@ module PointyHair
           case k
           when :'%cpu', :'%mem'
             v = v.to_f
-          when :pid, :ppid, :uid, :gid, :ruid, :rgid
+          when :pid, :ppid, :pgid, :uid, :gid, :ruid, :rgid
             v = v.to_i
           end
           h[k] = v
