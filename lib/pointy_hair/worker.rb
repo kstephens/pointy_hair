@@ -423,19 +423,23 @@ module PointyHair
     def set_status! status = nil, data = nil
       state.update(data) if data
       if status or data
-        now = Time.now
+        now = @status_now || Time.now
         unless state[:kind]
           state.update(worker_to_Hash)
         end
         state[:status] = status
         state[:status_time] = now
         state[:"#{status}_at"] = now.dup
+        state[:paused] = @paused
+        state[:stopping] = @stopping
+        state[:stopped] = @stopped
         write_file! :status, state[:status].to_s
         procline!
       end
       write_file! :state do | fh |
         write_yaml(fh, state)
       end
+      @status_now = nil
       self
     end
 
@@ -451,17 +455,24 @@ module PointyHair
       }
     end
 
-
     def write_status_file! status
       set_status! status
       write_file! status, state[:status_time]
       self
     end
 
+    # Used from Manager
     def get_state!
       read_file! :state do | fh |
         fh.set_encoding("UTF-8")
-        @state = YAML.load(fh.read) || { }
+        if @state = YAML.load(fh.read)
+          @work_id = state[:work_id]
+          @paused  = state[:paused]
+          @stopping = state[:stopping]
+          @stopped = state[:stopped]
+        else
+          @state = { }
+        end
       end
       self
     end
@@ -483,6 +494,7 @@ module PointyHair
 
     def check_stop!
       if file_exists?(:stop)
+        @stopping = Time.now # Time.parse(file_read!(:stop))
         stop!
       end
       self
