@@ -1,6 +1,4 @@
-require 'pointy_hair'
-
-require 'fileutils'
+require 'spec_helper'
 
 describe PointyHair::Worker do
   attr_accessor :w, :base_dir, :exit_code
