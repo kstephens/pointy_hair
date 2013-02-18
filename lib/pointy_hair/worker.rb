@@ -10,7 +10,7 @@ module PointyHair
     include FileSupport, StopSupport, PauseSupport, ProcessSupport, StateSupport
     attr_accessor :kind, :instance
     attr_accessor :config, :options, :base_dir, :logger
-    attr_accessor :max_work_id
+    attr_accessor :max_work_count
     attr_accessor :pid, :pid_running, :ppid
     attr_accessor :process_count, :keep_files
     attr_accessor :work, :work_error
@@ -22,7 +22,7 @@ module PointyHair
     def checked_at   ; @checked_at ; end
     def checked_at= x; state[:checked_at] = @checked_at = x ; end
 
-    state_accessor :status, :work_id, :exit_code, :running, :stopping, :stopped, :pause, :paused, :resume, :resumed
+    state_accessor :status, :work_id, :work_count, :exit_code, :running, :stopping, :stopped, :pause, :paused, :resume, :resumed
 
     def to_s
       "\#<#{self.class} #{kind} #{instance} #{pid} #{status} #{work_id} >"
@@ -57,7 +57,8 @@ module PointyHair
       @work_history = [ ]
       @ps = nil
       @ps_history = [ ]
-      self.work_id = 0
+      self.work_id = 0 # serial id for all work for this instance.
+      self.work_count = 0 # work for this run_loop!
       @pause_interval = 5
       if opts
         opts.each do | k, v|
@@ -108,8 +109,9 @@ module PointyHair
     end
 
     def run_loop
-      set_status! :run_loop_begin
       self.running = true
+      self.work_count = 0
+      set_status! :run_loop_begin
       while running? and not stopping
         @loop_t0 = Time.now
         check_stop!
@@ -119,7 +121,7 @@ module PointyHair
           set_status! :run_loop
           get_and_do_work!
         end
-        check_max_work_id!
+        check_max_work_count!
         check_ppid!
       end
       at_stopped!
@@ -129,16 +131,17 @@ module PointyHair
       set_status! :run_loop_end
     end
 
-    def check_max_work_id!
-      if @max_work_id && @max_work_id > 0 && @max_work_id < work_id
+    def check_max_work_count!
+      if @max_work_count && @max_work_count > 0 && work_count > @max_work_count
         self.running = false
-        set_status! :max_work_id_reached
-        max_work_id!
+        set_status! :max_work_count_reached
+        log { "max_work_count!" }
+        max_work_count!
       end
     end
 
     # callback
-    def max_work_id!
+    def max_work_count!
     end
 
     def get_and_do_work!
@@ -148,6 +151,7 @@ module PointyHair
       if @work = get_work!
         @wait_t1 = Time.now
         self.work_id += 1
+        self.work_count += 1
         set_status! :working
         save_work! work
         rename_file! :work_error, :last_work_error

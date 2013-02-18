@@ -27,7 +27,7 @@ describe PointyHair::Worker do
     w.running?.should == nil
     w.exit_code.should == nil
     w.pause_interval.should == 5
-    w.state.should == { :work_id => 0 }
+    w.state.should == { :work_id => 0, :work_count => 0 }
     w.status.should == nil
   end
 

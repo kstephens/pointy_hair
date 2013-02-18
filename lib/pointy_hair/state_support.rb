@@ -27,9 +27,11 @@ END
       now = Time.now
       @state = {
         :hostname => Socket.gethostname.force_encoding("UTF-8"),
+        :process_count => @process_count,
         :status => :created,
         :status_time => now,
         :created_at => now.dup,
+        :work_id => work_id || 0,
       }
     end
 
@@ -54,7 +56,8 @@ END
         e = make_error_hash(err)
         set_status! :work_error, :error => e
         write_file! :work_error do | fh |
-          e[:work_id] = @work_id
+          e[:work_id] = work_id
+          e[:work_count] = work_count
           e[:time] = state[:status_time]
           write_yaml(fh, e)
         end
@@ -66,7 +69,8 @@ END
       err = @work_error
 
       h = {
-        :work_id   => @work_id,
+        :work_id   => work_id,
+        :work_count => work_count,
         :loop_time => @loop_t0,
         :wait_time => @wait_t0,
         :work_time => @work_t0,
