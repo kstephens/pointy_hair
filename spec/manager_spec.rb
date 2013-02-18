@@ -1,8 +1,7 @@
 # -- encoding : utf-8 --
-require 'pointy_hair'
+require 'spec_helper'
 
 require 'pointy_hair/worker/test'
-require 'fileutils'
 
 describe PointyHair::Manager do
   attr_accessor :m, :base_dir, :exit_code

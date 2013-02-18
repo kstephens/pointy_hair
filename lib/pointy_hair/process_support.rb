@@ -74,13 +74,10 @@ module PointyHair
     end
 
     def redirect_stdio!
-      $_stdin  ||= $stdin
-      $_stdout ||= $stdout
-      $_stderr ||= $stderr
-      STDIN.close
       $stdin  = STDIN
       $stdout = STDOUT
       $stderr = STDERR
+      STDIN.reopen(File.open("/dev/null"))
       STDOUT.reopen(File.open("#{dir}/stdout", "a+"))
       STDERR.reopen(File.open("#{dir}/stderr", "a+"))
     end
