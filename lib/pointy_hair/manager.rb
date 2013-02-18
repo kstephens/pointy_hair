@@ -25,6 +25,8 @@ module PointyHair
 
     def workers; @workers; end
     def workers_running; @workers_running; end
+    def workers_stopping; @workers_stopping; end
+    def workers_left; @workers_left; end
 
     def go!
       before_start_process!
@@ -54,12 +56,14 @@ module PointyHair
     def after_run!
       stop_workers!
       stop_checking_at = Time.now + 5 # TODO max average run_loop time.
-      until Time.now >= stop_checking_at or workers_running.empty?
+      check_workers!
+      until (@workers_left = workers_running + workers_stopping).empty? or Time.now >= stop_checking_at
+        #  puts "@workers_left = #{@workers_left.map{|w| w.pid}.inspect}"
         check_workers!
         sleep 1
       end
-      unless workers_running.empty?
-        kill_workers!
+      unless workers_left.empty?
+        kill_workers!('KILL', workers_left)
       end
       stop_reaper!
       check_workers!
@@ -116,6 +120,11 @@ module PointyHair
           end
         end
       end
+    end
+
+    def reap_worker! worker
+      @reap_pids.enq([ worker.pid, worker ])
+      self
     end
 
     def stop_reaper!
@@ -307,9 +316,9 @@ module PointyHair
         worker._stopping = false
         @workers_pruned.delete(worker)
         # if it died, there is no process to reap.
-        #unless worker.status == :died
-        #  @reap_pids.enq([worker.pid, worker])
-        #end
+        unless worker.status == :died
+          reap_worker!(worker)
+        end
         worker.pid_running = nil
         worker_exited! worker
       end
@@ -361,11 +370,23 @@ module PointyHair
       end
     end
 
-    def kill_workers!
-      log { "kill_workers!" }
+    def kill_workers! sig = nil, workers = self.workers
+      sig ||= 'KILL'
+      log { "kill_workers! #{sig}" }
       workers.each do | worker |
-        Process.kill(9, worker.pid) rescue nil
+        kill_worker! worker
       end
+    end
+
+    def kill_worker!(worker)
+      log { "killing_worker!" }
+      killing_worker! worker
+      worker.kill!(sig) rescue nil
+      reap_worker!(worker)
+    end
+
+    # Callback
+    def killing_worker! worker
     end
 
     def process_exists? pid
