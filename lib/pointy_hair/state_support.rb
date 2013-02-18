@@ -119,29 +119,67 @@ END
     end
 
     def dt t0, t1
-      t1 and t0 and t1 > t0 and t1 - t0
+      t1 and t0 and t1 > t0 and (t1 - t0).to_f
     end
 
     def write_ps!
-      write_file! :ps do | fh |
-        write_yaml(fh, ps)
-      end
+      return nil unless self.ps
+      psn = {
+        :work_id => work_id,
+        :work_count => work_count,
+        :status => status,
+      }
+      ps = psn.update(self.ps)
 
       hist = ps_history
       hist.unshift ps
-      while hist.size > 10
+      while hist.size > 100
         hist.pop
       end
 
+      avg = { }
       h = {
         :time => ps[:time],
-        :ps => ps,
+        :work_id => work_id,
+        :work_count => work_count,
+        :avg => avg,
         :history => hist,
       }
+      if prev_ps = hist[1] and wi = ps[:work_id] and pwi = prev_ps[:work_id]
+        dw = wi - pwi
+        if dw >= 0
+          ps[:dwork_id] = dw
+          dt = ps[:dt] = dt(prev_ps[:time], ps[:time])
+          wps  = ps[:work_per_sec]          = dt && dw / dt
+          wpm  = ps[:work_per_min]          = wps && wps * 60
+          cpu_h = 1.0 - (ps[:pcpu] / 100)
+          wppc = wpm && wpm * cpu_h
+          ps[:work_per_min_per_cpu] = wppc
+        end
+      end
+
+      [ :dwork_id, :dt, :work_per_sec, :work_per_min, :pcpu, :work_per_min_per_cpu, :pmem ].each do | k |
+        avg[k] = array_hash_avg(hist, k)
+      end
+
+      write_file! :ps do | fh |
+        write_yaml(fh, ps)
+      end
       write_file! :ps_history do | fh |
         write_yaml(fh, h)
       end
       self
+    end
+
+    def array_hash_avg ah, k
+      sum = n = 0
+      ah.each do | h |
+        if v = h[k]
+          sum += v
+          n += 1
+        end
+      end
+      n > 0 && sum.to_f / n
     end
 
     def set_status! status = nil, data = nil

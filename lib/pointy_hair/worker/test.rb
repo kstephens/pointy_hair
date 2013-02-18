@@ -25,6 +25,12 @@ module PointyHair
         write_file! "output" do | fh |
           fh.puts work.to_s
         end
+        if x = options[:_100_pcpu_at_work_id] and work_id >= x
+          puts "  ### _100_pcpu!"
+          loop do
+            x.to_s
+          end
+        end
       end
 
       def put_work_back! work

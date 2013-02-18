@@ -227,6 +227,21 @@ describe PointyHair::Manager do
     w1.work_id.should > w0.work_id
   end
 
+  it 'should collect stats related to 100% and no dwork_id' do
+    m.worker_config[:kind_1][:options][:_100_pcpu_at_work_id] = 5
+    def m.get_work!
+      log "get_work! #{work_id}"
+      case
+      when work_id >= 20
+        log "stop!"
+        stop!
+      end
+      super
+    end
+    @dont_check_exit_codes = true
+    start_manager!
+  end
+
   def start_manager!
     m.go!
 
